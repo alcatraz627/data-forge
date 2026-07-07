@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/agenda_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/agenda_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="6dp"
+        android:text="Agenda"
+        android:textColor="@color/accent"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView android:id="@+id/agenda_row_0" style="@style/AgendaRow" />
+    <TextView android:id="@+id/agenda_row_1" style="@style/AgendaRow" />
+    <TextView android:id="@+id/agenda_row_2" style="@style/AgendaRow" />
+    <TextView android:id="@+id/agenda_row_3" style="@style/AgendaRow" />
+</LinearLayout>

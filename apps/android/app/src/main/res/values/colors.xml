@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Palette mirrors packages/tokens/tokens.json (dark). Kept in sync by hand
+     for now; the tokens generator emits ForgeTokens.kt for Compose surfaces. -->
+<resources>
+    <color name="bg">#131110</color>
+    <color name="surface">#1B1917</color>
+    <color name="surface2">#242120</color>
+    <color name="text">#ECE8E2</color>
+    <color name="dim">#9A938A</color>
+    <color name="border">#2F2B27</color>
+    <color name="accent">#E87D2A</color>
+    <color name="on_accent">#1C1006</color>
+    <color name="danger">#E0574F</color>
+</resources>

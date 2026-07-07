@@ -26,3 +26,8 @@ logs:
 # Usage: make import DIR=~/Downloads/Takeout
 import:
 	pnpm --filter @forge/server exec tsx src/import/cli.ts "$(DIR)"
+
+# Build the Android companion debug APK (needs JDK 17 + Android SDK; see
+# docs/android-toolchain.md). Output: apps/android/app/build/outputs/apk/debug/.
+apk: tokens
+	cd apps/android && JAVA_HOME="$$(brew --prefix openjdk@17)" ./gradlew assembleDebug

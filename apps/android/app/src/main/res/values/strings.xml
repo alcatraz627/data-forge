@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Data Forge</string>
+    <string name="capture_hint">Drop a thought…</string>
+    <string name="save">Save</string>
+    <string name="widget_capture_label">Forge: capture</string>
+    <string name="widget_agenda_label">Forge: agenda</string>
+</resources>
