@@ -1,5 +1,34 @@
+/* Data Forge — warm editorial UI.
+   Reading surfaces use a serif (--font-read); chrome uses the UI sans. Colour is
+   spent sparingly: the accent marks intent, importance drives weight + a hot/cool
+   tag scale, everything else stays warm-neutral so the page reads calm. */
+
+:root {
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 14px rgb(0 0 0 / 22%);
+  --shadow-2: 0 8px 24px rgb(0 0 0 / 38%), 0 24px 60px rgb(0 0 0 / 42%);
+  --ring: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --tap: 40px;
+}
+
+:root[data-theme="light"] {
+  --shadow-1: 0 1px 2px rgb(90 70 40 / 8%), 0 4px 14px rgb(90 70 40 / 8%);
+  --shadow-2: 0 8px 24px rgb(90 70 40 / 12%), 0 24px 60px rgb(90 70 40 / 14%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --shadow-1: 0 1px 2px rgb(90 70 40 / 8%), 0 4px 14px rgb(90 70 40 / 8%);
+    --shadow-2: 0 8px 24px rgb(90 70 40 / 12%), 0 24px 60px rgb(90 70 40 / 14%);
+  }
+}
+
 * {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -9,33 +38,59 @@ body {
   font-family: var(--font-ui);
   font-size: var(--text-md);
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .app {
-  max-width: 640px;
+  max-width: 680px;
   margin: 0 auto;
-  padding: var(--space-4);
-  padding-bottom: var(--space-6);
+  padding: var(--space-4) var(--space-4) var(--space-7);
 }
 
+/* ── Icons ─────────────────────────────────────────────────────────── */
+.icon {
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -0.15em;
+}
+
+/* ── Top bar ───────────────────────────────────────────────────────── */
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-block: var(--space-3);
   gap: var(--space-3);
+  padding-block: var(--space-2) var(--space-4);
 }
 
 .topbar h1 {
-  font-size: var(--text-lg);
-  margin: 0;
+  font-family: var(--font-read);
+  font-size: var(--text-xl);
+  font-weight: 600;
   letter-spacing: 0.2px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.topbar h1 .icon {
+  color: var(--accent);
+  width: 0.9em;
+  height: 0.9em;
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -57,24 +112,41 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--dim);
-  opacity: 0.5;
+  background: var(--faint);
   flex: none;
+  transition: background 0.3s var(--ease);
 }
 
 .sync-dot.on {
   background: var(--ok);
-  opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
 }
 
+/* ── Buttons ───────────────────────────────────────────────────────── */
 button {
   font: inherit;
   color: inherit;
   cursor: pointer;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  transition: background 0.15s var(--ease), border-color 0.15s var(--ease), transform 0.05s
+    var(--ease), color 0.15s var(--ease);
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+button:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
 }
 
 button.primary {
@@ -84,8 +156,12 @@ button.primary {
   font-weight: 600;
 }
 
+button.primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, white);
+}
+
 button.primary:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
 }
 
@@ -93,17 +169,48 @@ button.ghost {
   background: transparent;
 }
 
+button.ghost:hover {
+  background: var(--surface-2);
+}
+
 button.danger {
   color: var(--danger);
 }
 
+button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+/* Compact icon-only button (top bar, action rows). */
+.icon-btn {
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: var(--space-2);
+  background: transparent;
+  border-color: transparent;
+  color: var(--dim);
+}
+
+.icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.icon-btn .icon {
+  width: 1.25em;
+  height: 1.25em;
+}
+
+/* ── Capture ───────────────────────────────────────────────────────── */
 .capture {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
+  box-shadow: var(--shadow-1);
 }
 
 .capture textarea,
@@ -116,52 +223,22 @@ button.danger {
   border-radius: var(--radius-md);
   padding: var(--space-3);
   font: inherit;
-  min-height: 72px;
+  font-size: var(--text-md);
+  line-height: 1.55;
+  min-height: 84px;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.capture textarea::placeholder {
+  color: var(--faint);
 }
 
 .capture textarea:focus,
 .editor textarea:focus,
 .search:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-  border-color: transparent;
-}
-
-.axis-picker {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.axis-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.axis-name {
-  color: var(--dim);
-  font-size: var(--text-sm);
-  width: 84px;
-  flex: none;
-}
-
-.axis-chips {
-  display: flex;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-}
-
-.chip {
-  font-size: var(--text-sm);
-  padding: 2px var(--space-2);
-  border-radius: 999px;
-  color: var(--dim);
-}
-
-.chip-active {
-  color: var(--on-accent);
-  background: var(--accent);
-  border-color: transparent;
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: var(--ring);
 }
 
 .capture-actions {
@@ -169,20 +246,108 @@ button.danger {
   justify-content: flex-end;
 }
 
+/* ── Axis picker (segmented) ───────────────────────────────────────── */
+.axis-picker {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.axis-row {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.axis-name {
+  color: var(--dim);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 600;
+}
+
+.axis-chips {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 2px;
+}
+
+.axis-chips .chip {
+  flex: 1;
+  min-height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  font-size: var(--text-sm);
+  border-radius: calc(var(--radius-md) - 4px);
+  padding: var(--space-1);
+  white-space: nowrap;
+}
+
+.axis-chips .chip:hover {
+  color: var(--text);
+}
+
+.axis-chips .chip-active {
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+
+/* Importance row: the active segment carries the hot/cool importance colour. */
+.axis-row[data-axis="importance"] .chip-active {
+  color: var(--on-accent);
+}
+.axis-row[data-axis="importance"] .chip-active[data-value="low"] {
+  background: var(--imp-low);
+}
+.axis-row[data-axis="importance"] .chip-active[data-value="normal"] {
+  background: var(--faint);
+}
+.axis-row[data-axis="importance"] .chip-active[data-value="high"] {
+  background: var(--imp-high);
+}
+.axis-row[data-axis="importance"] .chip-active[data-value="critical"] {
+  background: var(--imp-critical);
+}
+
+/* ── Search ────────────────────────────────────────────────────────── */
+.search-wrap {
+  position: relative;
+  margin-top: var(--space-4);
+}
+
+.search-wrap .icon {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--faint);
+  pointer-events: none;
+}
+
 .search {
   width: 100%;
-  margin-top: var(--space-4);
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-6) + 2px);
   font: inherit;
 }
 
+.search::placeholder {
+  color: var(--faint);
+}
+
+/* ── View chips ────────────────────────────────────────────────────── */
 .view-chips {
   display: flex;
-  gap: var(--space-1);
+  gap: var(--space-2);
   margin-top: var(--space-4);
   overflow-x: auto;
   scrollbar-width: none;
@@ -196,40 +361,236 @@ button.danger {
 .view-chip {
   white-space: nowrap;
   flex: none;
+  min-height: 34px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
   background: var(--surface);
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.view-chip .count {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .view-chip.chip-active {
   background: var(--accent);
   color: var(--on-accent);
+  border-color: transparent;
+  font-weight: 600;
 }
 
+.view-chip.chip-active .count {
+  color: color-mix(in srgb, var(--on-accent) 75%, transparent);
+}
+
+/* ── Stream + group headings ───────────────────────────────────────── */
 .stream {
-  margin-top: var(--space-4);
+  margin-top: var(--space-5);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.group-heading {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  font-weight: 700;
+  color: var(--faint);
+  margin: var(--space-2) 0 0;
+  padding-left: 2px;
+}
+
+/* ── Note cards ────────────────────────────────────────────────────── */
+.card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: stretch;
+  justify-content: normal;
+  align-items: normal;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease), transform 0.06s
+    var(--ease);
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-1);
+}
+
+.card:active {
+  transform: scale(0.995);
+}
+
+/* Importance drives a left accent rail + title weight, so the eye finds the
+   critical note first without reading a word. */
+.card[data-importance="high"] {
+  border-left: 3px solid var(--imp-high);
+}
+.card[data-importance="critical"] {
+  border-left: 3px solid var(--imp-critical);
+}
+.card[data-importance="low"] {
+  opacity: 0.86;
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.card-title {
+  font-family: var(--font-read);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.card[data-importance="critical"] .card-title {
+  font-weight: 700;
+}
+
+.card[data-importance="low"] .card-title {
+  font-weight: 500;
+  color: var(--dim);
+}
+
+.card-age {
+  color: var(--faint);
+  font-size: var(--text-xs);
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-preview {
+  color: var(--dim);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.card-tags {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ── Tags / chips (read-only, on cards) ────────────────────────────── */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--dim);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 2px var(--space-2);
+  line-height: 1.6;
+}
+
+.tag .icon {
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.tag[data-kind="importance"][data-value="high"] {
+  color: var(--imp-high);
+  background: color-mix(in srgb, var(--imp-high) 15%, transparent);
+}
+
+.tag[data-kind="importance"][data-value="critical"] {
+  color: var(--imp-critical);
+  background: color-mix(in srgb, var(--imp-critical) 16%, transparent);
+}
+
+.tag[data-kind="reminder"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.tag[data-kind="reminder"][data-overdue="true"] {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+}
+
+.tag[data-kind="canvas"] {
+  color: var(--dim);
+}
+
+/* ── Empty state ───────────────────────────────────────────────────── */
+.empty {
+  color: var(--dim);
+  text-align: center;
+  padding: var(--space-7) var(--space-4);
   display: grid;
   gap: var(--space-2);
+  justify-items: center;
 }
 
+.empty .icon {
+  width: 32px;
+  height: 32px;
+  color: var(--faint);
+}
+
+.empty .empty-hint {
+  font-size: var(--text-sm);
+  color: var(--faint);
+}
+
+/* ── Bottom bar (mobile) ───────────────────────────────────────────── */
 .bottom-bar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   display: flex;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
   padding: var(--space-1) var(--space-2) calc(var(--space-1) + env(safe-area-inset-bottom));
-  z-index: 10;
+  z-index: 20;
 }
 
 .bottom-bar .tab {
   flex: 1;
   background: transparent;
   border: none;
-  padding: var(--space-2);
+  padding: var(--space-1);
   color: var(--dim);
-  font-size: var(--text-sm);
-  border-radius: var(--radius-sm);
+  font-size: 11px;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 48px;
+}
+
+.bottom-bar .tab .icon {
+  width: 22px;
+  height: 22px;
 }
 
 .bottom-bar .tab-active {
@@ -237,95 +598,44 @@ button.danger {
   font-weight: 600;
 }
 
-.app-mobile main {
-  padding-bottom: 84px;
-}
-
-.card {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-}
-
-.card:hover {
-  border-color: var(--dim);
-}
-
-.card-top {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.card-title {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.card-age {
-  color: var(--dim);
-  font-size: var(--text-sm);
-  flex: none;
-}
-
-.card-preview {
-  color: var(--dim);
-  font-size: var(--text-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-top: 2px;
-}
-
-.card-tags {
-  display: flex;
-  gap: var(--space-1);
-  margin-top: var(--space-1);
-  flex-wrap: wrap;
-}
-
-.tag {
-  font-size: 11px;
+.bottom-bar .tab-new .icon {
   color: var(--accent);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0 var(--space-2);
 }
 
-.empty {
-  color: var(--dim);
-  text-align: center;
-  padding: var(--space-6) 0;
+.app-mobile main {
+  padding-bottom: 88px;
 }
 
+/* ── Editor (dialog on desktop, bottom sheet on mobile) ────────────── */
 .editor-backdrop {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 45%);
+  background: rgb(0 0 0 / 50%);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
+  z-index: 30;
+  animation: fade 0.15s var(--ease);
 }
 
 .editor {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   padding: var(--space-4);
   width: min(640px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
+  box-shadow: var(--shadow-2);
+  animation: pop 0.18s var(--ease);
 }
 
 .editor textarea {
-  min-height: 200px;
+  min-height: 220px;
 }
 
 .editor-canvas {
@@ -348,20 +658,41 @@ button.danger {
   height: auto;
 }
 
+/* A labelled group wraps the axis picker + reminders so the editor reads as
+   sections, not floating controls. */
+.editor-section {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.editor-section > .section-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+  color: var(--faint);
+}
+
 .rich-editor .ProseMirror {
-  min-height: 200px;
+  font-family: var(--font-read);
+  font-size: var(--text-md);
+  line-height: 1.6;
+  min-height: 220px;
   max-height: 55vh;
   overflow-y: auto;
   padding: var(--space-3);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
 }
 
 .rich-editor .ProseMirror:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-  border-color: transparent;
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: var(--ring);
 }
 
 .rich-editor .ProseMirror > :first-child {
@@ -380,13 +711,13 @@ button.danger {
 }
 
 .rich-editor .ProseMirror p {
-  margin: var(--space-1) 0;
+  margin: var(--space-2) 0;
 }
 
 .rich-editor .ProseMirror ul,
 .rich-editor .ProseMirror ol {
   padding-left: var(--space-5);
-  margin: var(--space-1) 0;
+  margin: var(--space-2) 0;
 }
 
 .rich-editor .ProseMirror code {
@@ -440,16 +771,26 @@ button.danger {
 }
 
 .rich-editor .ProseMirror blockquote {
-  border-left: 3px solid var(--border);
+  border-left: 3px solid var(--border-strong);
   margin: var(--space-2) 0;
   padding-left: var(--space-3);
   color: var(--dim);
+  font-style: italic;
 }
 
+/* Editor action bar: primary actions right-aligned, secondary (delete, raw,
+   history, archive) as icon buttons that never overflow the sheet width. */
 .editor-actions {
   display: flex;
   gap: var(--space-2);
   align-items: center;
+  flex-wrap: wrap;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.editor-actions .spacer {
+  flex: 1;
 }
 
 button.ghost.active {
@@ -457,6 +798,12 @@ button.ghost.active {
   border-color: var(--accent);
 }
 
+.icon-btn.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* ── Reminders ─────────────────────────────────────────────────────── */
 .reminder-editor {
   display: grid;
   gap: var(--space-2);
@@ -466,6 +813,7 @@ button.ghost.active {
   display: flex;
   gap: var(--space-2);
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .reminder-row input[type="datetime-local"],
@@ -474,24 +822,35 @@ button.ghost.active {
   color: inherit;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--tap);
   color-scheme: dark light;
 }
 
 .reminder-row input[type="datetime-local"] {
   flex: 1;
+  min-width: 160px;
 }
 
 .add-reminder {
   justify-self: start;
   color: var(--accent);
+  border-style: dashed;
+  background: transparent;
 }
 
+.helper {
+  font-size: var(--text-sm);
+  color: var(--faint);
+  line-height: 1.5;
+}
+
+/* ── Agenda ────────────────────────────────────────────────────────── */
 .agenda {
   margin-top: var(--space-4);
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
 .agenda-group {
@@ -500,10 +859,11 @@ button.ghost.active {
 }
 
 .agenda-heading {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
-  color: var(--dim);
+  letter-spacing: 0.6px;
+  font-weight: 700;
+  color: var(--faint);
   margin: 0;
 }
 
@@ -514,11 +874,24 @@ button.ghost.active {
 .agenda-item {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-1);
+}
+
+.agenda-item .agenda-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  flex: none;
+}
+
+.agenda-item.is-overdue .agenda-dot {
+  background: var(--danger);
 }
 
 .agenda-main {
@@ -526,14 +899,18 @@ button.ghost.active {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  justify-content: center;
   gap: 2px;
   background: transparent;
   border: none;
   text-align: left;
   min-width: 0;
+  min-height: 0;
+  padding: 0;
 }
 
 .agenda-title {
+  font-family: var(--font-read);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -544,6 +921,9 @@ button.ghost.active {
 .agenda-when {
   font-size: var(--text-sm);
   color: var(--dim);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .agenda-when.overdue {
@@ -556,6 +936,7 @@ button.ghost.active {
   flex: none;
 }
 
+/* ── History ───────────────────────────────────────────────────────── */
 .history-panel {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -580,6 +961,7 @@ button.ghost.active {
 
 .history-row {
   display: flex;
+  justify-content: flex-start;
   gap: var(--space-3);
   width: 100%;
   text-align: left;
@@ -587,6 +969,7 @@ button.ghost.active {
   border: none;
   border-bottom: 1px solid var(--border);
   padding: var(--space-2) var(--space-3);
+  min-height: 0;
 }
 
 .history-row:hover {
@@ -612,7 +995,35 @@ button.ghost.active {
   flex: 1;
 }
 
-@media (max-width: 520px) {
+/* ── Motion ────────────────────────────────────────────────────────── */
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ── Mobile: editor becomes a bottom sheet ─────────────────────────── */
+@media (max-width: 560px) {
   .editor-backdrop {
     padding: 0;
     align-items: stretch;
@@ -620,12 +1031,31 @@ button.ghost.active {
 
   .editor {
     width: 100%;
-    border-radius: 0;
+    margin-top: auto;
+    max-height: 94vh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     border: none;
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+    animation: sheet-up 0.24s var(--ease);
+  }
+
+  .editor::before {
+    content: "";
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--border-strong);
+    margin: 0 auto var(--space-1);
+  }
+
+  .editor-canvas {
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
   }
 
   .editor textarea {
-    flex: 1;
-    min-height: 40vh;
+    min-height: 32vh;
   }
 }

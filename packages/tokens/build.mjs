@@ -27,6 +27,7 @@ ${scaleVars('space', 'px')}
 ${scaleVars('radius', 'px')}
 ${scaleVars('text', 'px')}
   --font-ui: ${tokens.font.ui};
+  --font-read: ${tokens.font.read};
   --font-mono: ${tokens.font.mono};
 }
 :root[data-theme='light'] {

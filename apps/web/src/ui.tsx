@@ -12,12 +12,14 @@ import {
   type ServerDoc,
   type ViewDef,
   buildAgenda,
+  effectiveFireAt,
   isCanvas,
   nowIso,
 } from '@forge/core';
-import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { type JSX, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import * as api from './api';
 import { NoteEditor } from './editor/NoteEditor';
+import { Icon, type IconName } from './icons';
 import { actOnReminder, captureNote, flashNotice, removeDoc, saveDoc } from './store';
 
 const LazyCanvasEditor = lazy(() => import('./editor/CanvasEditor'));
@@ -80,11 +82,11 @@ export function ViewChips({
           <button
             key={v.id}
             type="button"
-            className={`chip view-chip${v.id === active ? ' chip-active' : ''}`}
+            className={`view-chip${v.id === active ? ' chip-active' : ''}`}
             onClick={() => onPick(v.id)}
           >
             {v.name}
-            {counts[v.id] ? ` · ${counts[v.id]}` : ''}
+            {counts[v.id] ? <span className="count"> {counts[v.id]}</span> : null}
           </button>
         ))}
     </div>
@@ -100,22 +102,23 @@ export function BottomBar({
   screen: MobileScreen;
   onPick: (s: MobileScreen) => void;
 }) {
-  const tabs: Array<[MobileScreen, string]> = [
-    ['notes', 'Notes'],
-    ['agenda', 'Agenda'],
-    ['capture', 'New'],
-    ['search', 'Search'],
+  const tabs: Array<[MobileScreen, string, IconName]> = [
+    ['notes', 'Notes', 'note'],
+    ['agenda', 'Agenda', 'calendar'],
+    ['capture', 'New', 'plus'],
+    ['search', 'Search', 'search'],
   ];
   return (
     <nav className="bottom-bar">
-      {tabs.map(([s, label]) => (
+      {tabs.map(([s, label, icon]) => (
         <button
           key={s}
           type="button"
-          className={`tab${s === screen ? ' tab-active' : ''}`}
+          className={`tab${s === screen ? ' tab-active' : ''}${s === 'capture' ? ' tab-new' : ''}`}
           onClick={() => onPick(s)}
         >
-          {label}
+          <Icon name={icon} />
+          <span>{label}</span>
         </button>
       ))}
     </nav>
@@ -151,13 +154,14 @@ function AxisRow<T extends string>({
   onPick: (v: T) => void;
 }) {
   return (
-    <div className="axis-row">
+    <div className="axis-row" data-axis={name}>
       <span className="axis-name">{name}</span>
       <div className="axis-chips">
         {steps.map((step) => (
           <button
             key={step}
             type="button"
+            data-value={step}
             className={`chip${step === active ? ' chip-active' : ''}`}
             onClick={() => onPick(step)}
           >
@@ -264,32 +268,70 @@ export function Capture({ onSaved }: { onSaved?: () => void }) {
 }
 
 export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }) {
-  const tags: string[] = [];
-  if (isCanvas(doc.body)) tags.push('canvas');
-  if (doc.rev === 0) tags.push('unsynced');
-  if (doc.pinned) tags.push('pinned');
-  if (doc.source.startsWith('conflict:')) tags.push('conflict');
-  const activeReminder = doc.reminders.find((r) => r.status !== 'done');
-  if (activeReminder) tags.push(`⏰ ${reminderLabel(activeReminder.at)}`);
-  if (doc.durability !== CAPTURE_DEFAULTS.durability) tags.push(doc.durability);
-  if (doc.formality !== CAPTURE_DEFAULTS.formality) tags.push(doc.formality);
-  if (doc.importance !== CAPTURE_DEFAULTS.importance) tags.push(doc.importance);
+  const canvas = isCanvas(doc.body);
+  const reminder = doc.reminders.find((r) => r.status !== 'done');
+  const overdue = reminder ? new Date(effectiveFireAt(reminder)).getTime() < Date.now() : false;
+  // Ordered by signal strength: what needs attention (reminder) first, then the
+  // axes that differ from the capture default (so a normal/draft note stays quiet).
+  const tags: JSX.Element[] = [];
+  if (reminder)
+    tags.push(
+      <span key="rem" className="tag" data-kind="reminder" data-overdue={overdue}>
+        <Icon name="bell" />
+        {reminderLabel(reminder.at)}
+      </span>,
+    );
+  if (doc.importance !== CAPTURE_DEFAULTS.importance)
+    tags.push(
+      <span key="imp" className="tag" data-kind="importance" data-value={doc.importance}>
+        {doc.importance}
+      </span>,
+    );
+  if (doc.durability !== CAPTURE_DEFAULTS.durability)
+    tags.push(
+      <span key="dur" className="tag">
+        {doc.durability}
+      </span>,
+    );
+  if (doc.formality !== CAPTURE_DEFAULTS.formality)
+    tags.push(
+      <span key="form" className="tag">
+        {doc.formality}
+      </span>,
+    );
+  if (canvas)
+    tags.push(
+      <span key="canvas" className="tag" data-kind="canvas">
+        <Icon name="pencil" />
+        canvas
+      </span>,
+    );
+  if (doc.pinned)
+    tags.push(
+      <span key="pin" className="tag">
+        pinned
+      </span>,
+    );
+  if (doc.source.startsWith('conflict:'))
+    tags.push(
+      <span key="conflict" className="tag" data-kind="importance" data-value="critical">
+        conflict
+      </span>,
+    );
+  if (doc.rev === 0)
+    tags.push(
+      <span key="unsynced" className="tag">
+        unsynced
+      </span>,
+    );
   return (
-    <button type="button" className="card" onClick={onOpen}>
+    <button type="button" className="card" data-importance={doc.importance} onClick={onOpen}>
       <div className="card-top">
         <span className="card-title">{doc.title}</span>
         <span className="card-age">{relTime(doc.updated)}</span>
       </div>
       {doc.preview && <div className="card-preview">{doc.preview}</div>}
-      {tags.length > 0 && (
-        <div className="card-tags">
-          {tags.map((t) => (
-            <span key={t} className="tag">
-              {t}
-            </span>
-          ))}
-        </div>
-      )}
+      {tags.length > 0 && <div className="card-tags">{tags}</div>}
     </button>
   );
 }
@@ -578,29 +620,55 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
             autoFocus
           />
         )}
-        {!canvas && <AxisPicker value={axes} onChange={setAxes} />}
-        {!canvas && <ReminderEditor reminders={reminders} onChange={setReminders} />}
+        {!canvas && (
+          <div className="editor-section">
+            <span className="section-label">Axes</span>
+            <AxisPicker value={axes} onChange={setAxes} />
+          </div>
+        )}
+        {!canvas && (
+          <div className="editor-section">
+            <span className="section-label">Reminders</span>
+            <ReminderEditor reminders={reminders} onChange={setReminders} />
+          </div>
+        )}
         <div className="editor-actions">
-          <button type="button" className="ghost danger" onClick={() => void del()}>
-            Delete
+          <button
+            type="button"
+            className="icon-btn danger"
+            title="Delete note"
+            onClick={() => void del()}
+          >
+            <Icon name="trash" />
           </button>
           {!canvas && (
-            <button type="button" className="ghost" onClick={toggleMode}>
-              {editorMode === 'rich' ? 'raw' : 'rich'}
+            <button
+              type="button"
+              className="icon-btn"
+              title={editorMode === 'rich' ? 'Switch to raw markdown' : 'Switch to rich text'}
+              onClick={toggleMode}
+            >
+              <Icon name={editorMode === 'rich' ? 'code' : 'pencil'} />
             </button>
           )}
-          <button type="button" className="ghost" onClick={() => void toggleArchive()}>
-            {doc.archived ? 'unarchive' : 'archive'}
+          <button
+            type="button"
+            className="icon-btn"
+            title={doc.archived ? 'Unarchive' : 'Archive'}
+            onClick={() => void toggleArchive()}
+          >
+            <Icon name="archive" />
           </button>
           <button
             type="button"
-            className={`ghost${showHistory ? ' active' : ''}`}
+            className={`icon-btn${showHistory ? ' active' : ''}`}
+            title="Version history"
             onClick={() => setShowHistory((h) => !h)}
           >
-            history
+            <Icon name="history" />
           </button>
           <span className="spacer" />
-          <button type="button" onClick={maybeClose}>
+          <button type="button" className="ghost" onClick={maybeClose}>
             Close
           </button>
           <button
@@ -609,6 +677,7 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
             disabled={!dirty || busy}
             onClick={() => void save()}
           >
+            <Icon name="check" />
             Save
           </button>
         </div>

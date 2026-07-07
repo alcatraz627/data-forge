@@ -1,5 +1,6 @@
 import { DEFAULT_VIEWS, type ServerDoc, type ViewDef, matchesView } from '@forge/core';
 import { useEffect, useMemo, useState } from 'react';
+import { Icon } from './icons';
 import { captureCanvas, filterDocs, startSync, useForge } from './store';
 import {
   Agenda,
@@ -98,7 +99,10 @@ export default function App() {
   return (
     <div className={isMobile ? 'app app-mobile' : 'app'}>
       <header className="topbar">
-        <h1>Data Forge</h1>
+        <h1>
+          <Icon name="note" />
+          Data Forge
+        </h1>
         <div className="topbar-right">
           {snap.notice && <span className="notice">{snap.notice}</span>}
           {snap.pending > 0 && <span className="pending">{snap.pending} pending</span>}
@@ -111,20 +115,27 @@ export default function App() {
               type="button"
               className={`ghost${agendaMode ? ' active' : ''}`}
               onClick={() => setAgendaMode((a) => !a)}
+              title="Agenda"
             >
-              ⏰ agenda{reminderCount ? ` · ${reminderCount}` : ''}
+              <Icon name="bell" />
+              agenda{reminderCount ? ` · ${reminderCount}` : ''}
             </button>
           )}
           <button
             type="button"
-            className="ghost"
+            className="icon-btn"
             title="New canvas"
             onClick={() => void captureCanvas().then(setOpenDoc)}
           >
-            ✎ canvas
+            <Icon name="pencil" />
           </button>
-          <button type="button" className="ghost" onClick={toggleTheme}>
-            {theme === 'dark' ? 'light mode' : 'dark mode'}
+          <button
+            type="button"
+            className="icon-btn"
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            onClick={toggleTheme}
+          >
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
           </button>
         </div>
       </header>
