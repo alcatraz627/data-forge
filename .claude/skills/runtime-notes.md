@@ -27,6 +27,22 @@ Insights:
 - Service-worker staleness recurs when rebuilding under an active PWA: the SW
   serves a precached index.html referencing an old chunk hash -> "Failed to
   load module script". Clear SW + caches between rebuilds in browser tests.
+- Opus M1-M5 review found 12 real bugs by RUNNING probes (git merge-file, the
+  real rrule build), all fixed + re-verified this session. Highest-value:
+  * H3 was a regression the outbox refactor (M1a) introduced silently: making
+    saveDoc fire-and-forget through the outbox meant the editor could no longer
+    advance baseRev, so it froze it — turning ordinary sequential edits into
+    self-merges that forked spurious conflicts. Fix: saveDoc awaits the drain
+    and returns the acked rev.
+  * H4 rrule-in-UTC: recurrence must expand on local wall-clock (floating-frame:
+    Date whose UTC fields = wall clock; compute; shift back with the offset).
+    And the web must STORE reminders with the offset (nowIso), not toISOString
+    (Z) — else the offset is lost before the engine ever sees it.
+  * H1/H2 Android were the most severe (silent data loss + invisible reminders
+    on the exact target phone) and only caught by inspection — a compile passes
+    both. Re-verified in the emulator (offline note survives; perm dialog shows).
+  Lesson reinforced: a fresh adversarial reviewer that RUNS probes is worth its
+  cost on a large surface; green tests + green compile miss whole bug classes.
 
 ---
 
