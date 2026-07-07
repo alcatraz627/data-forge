@@ -2,6 +2,7 @@ import { DEFAULT_VIEWS, type ServerDoc, type ViewDef, matchesView } from '@forge
 import { useEffect, useMemo, useState } from 'react';
 import { filterDocs, startSync, useForge } from './store';
 import {
+  Agenda,
   BottomBar,
   Capture,
   EditorPanel,
@@ -33,6 +34,7 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [viewId, setViewId] = useState('all');
   const [screen, setScreen] = useState<MobileScreen>('notes');
+  const [agendaMode, setAgendaMode] = useState(false);
   // Captured at click time: the editor works on a stable snapshot (its own
   // baseRev handles concurrent changes), so a live delete elsewhere can't
   // yank the panel out from under in-progress typing.
@@ -83,10 +85,15 @@ export default function App() {
     return c;
   }, [snap.docs]);
 
-  const showCapture = !isMobile || screen === 'capture';
-  const showSearch = !isMobile || screen === 'search';
-  const showChips = !isMobile || screen === 'notes';
-  const showStream = !isMobile || screen !== 'capture';
+  const showAgenda = isMobile ? screen === 'agenda' : agendaMode;
+  const showCapture = !isMobile ? !agendaMode : screen === 'capture';
+  const showSearch = !isMobile ? !agendaMode : screen === 'search';
+  const showChips = !isMobile ? !agendaMode : screen === 'notes';
+  const showStream = !showAgenda && (!isMobile ? !agendaMode : screen !== 'capture');
+  const reminderCount = useMemo(
+    () => snap.docs.filter((d) => d.reminders.some((r) => r.status !== 'done')).length,
+    [snap.docs],
+  );
 
   return (
     <div className={isMobile ? 'app app-mobile' : 'app'}>
@@ -99,6 +106,15 @@ export default function App() {
             className={`sync-dot${snap.connected ? ' on' : ''}`}
             title={snap.connected ? 'live sync' : 'reconnecting…'}
           />
+          {!isMobile && (
+            <button
+              type="button"
+              className={`ghost${agendaMode ? ' active' : ''}`}
+              onClick={() => setAgendaMode((a) => !a)}
+            >
+              ⏰ agenda{reminderCount ? ` · ${reminderCount}` : ''}
+            </button>
+          )}
           <button type="button" className="ghost" onClick={toggleTheme}>
             {theme === 'dark' ? 'light mode' : 'dark mode'}
           </button>
@@ -119,6 +135,12 @@ export default function App() {
         )}
         {showChips && !query.trim() && (
           <ViewChips views={DEFAULT_VIEWS} active={viewId} counts={counts} onPick={setViewId} />
+        )}
+        {showAgenda && (
+          <Agenda
+            docs={snap.docs}
+            onOpen={(id) => setOpenDoc(snap.docs.find((d) => d.id === id) ?? null)}
+          />
         )}
         {showStream && (
           <section className="stream">

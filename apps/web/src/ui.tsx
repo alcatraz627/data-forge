@@ -1,4 +1,5 @@
 import {
+  type AgendaEntry,
   CAPTURE_DEFAULTS,
   DURABILITY,
   type Durability,
@@ -6,14 +7,38 @@ import {
   type Formality,
   IMPORTANCE,
   type Importance,
+  RRULE_PRESETS,
+  type Reminder,
   type ServerDoc,
   type ViewDef,
+  buildAgenda,
 } from '@forge/core';
 import { useEffect, useRef, useState } from 'react';
 import { NoteEditor } from './editor/NoteEditor';
-import { captureNote, flashNotice, removeDoc, saveDoc } from './store';
+import { actOnReminder, captureNote, flashNotice, removeDoc, saveDoc } from './store';
 
-export type MobileScreen = 'notes' | 'search' | 'capture';
+/** ISO instant -> value for a <input type=datetime-local> in local time. */
+function isoToLocalInput(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const localInputToIso = (local: string): string => new Date(local).toISOString();
+
+export function reminderLabel(at: string): string {
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return at;
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+export type MobileScreen = 'notes' | 'agenda' | 'search' | 'capture';
 
 export function useIsMobile(): boolean {
   const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
@@ -70,8 +95,9 @@ export function BottomBar({
 }) {
   const tabs: Array<[MobileScreen, string]> = [
     ['notes', 'Notes'],
-    ['search', 'Search'],
+    ['agenda', 'Agenda'],
     ['capture', 'New'],
+    ['search', 'Search'],
   ];
   return (
     <nav className="bottom-bar">
@@ -235,6 +261,8 @@ export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }
   if (doc.rev === 0) tags.push('unsynced');
   if (doc.pinned) tags.push('pinned');
   if (doc.source.startsWith('conflict:')) tags.push('conflict');
+  const activeReminder = doc.reminders.find((r) => r.status !== 'done');
+  if (activeReminder) tags.push(`⏰ ${reminderLabel(activeReminder.at)}`);
   if (doc.durability !== CAPTURE_DEFAULTS.durability) tags.push(doc.durability);
   if (doc.formality !== CAPTURE_DEFAULTS.formality) tags.push(doc.formality);
   if (doc.importance !== CAPTURE_DEFAULTS.importance) tags.push(doc.importance);
@@ -258,6 +286,120 @@ export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }
   );
 }
 
+/** The time-sorted list of what needs attention: every active reminder across
+ * notes, overdue first, with done and snooze actions. This is the Google
+ * Tasks replacement surface. */
+export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: string) => void }) {
+  const [, force] = useState(0);
+  const entries = buildAgenda(docs, new Date());
+  const groups: Array<[string, AgendaEntry[]]> = [
+    ['Overdue', entries.filter((e) => e.overdue)],
+    ['Upcoming', entries.filter((e) => !e.overdue)],
+  ];
+
+  const act = async (
+    e: AgendaEntry,
+    action: 'done' | 'snooze',
+    snoozeUntil?: Date,
+  ): Promise<void> => {
+    await actOnReminder(e.docId, e.reminderIndex, action, snoozeUntil);
+    force((n) => n + 1);
+  };
+
+  if (entries.length === 0) {
+    return <p className="empty">Nothing scheduled. Add a reminder from any note.</p>;
+  }
+
+  return (
+    <div className="agenda">
+      {groups.map(([name, list]) =>
+        list.length === 0 ? null : (
+          <div className="agenda-group" key={name}>
+            <h2 className={`agenda-heading${name === 'Overdue' ? ' overdue' : ''}`}>{name}</h2>
+            {list.map((e) => (
+              <div className="agenda-item" key={`${e.docId}:${e.reminderIndex}`}>
+                <button type="button" className="agenda-main" onClick={() => onOpen(e.docId)}>
+                  <span className="agenda-title">{e.title}</span>
+                  <span className={`agenda-when${e.overdue ? ' overdue' : ''}`}>
+                    {reminderLabel(e.at)}
+                    {e.recurring ? ' ↻' : ''}
+                    {e.snoozed ? ' 💤' : ''}
+                  </span>
+                </button>
+                <div className="agenda-actions">
+                  <button type="button" className="ghost" onClick={() => void act(e, 'done')}>
+                    done
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => void act(e, 'snooze', new Date(Date.now() + 24 * 3_600_000))}
+                  >
+                    tomorrow
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
+/** Add, retime, or remove reminders on the note being edited. Recurrence is a
+ * small set of presets; a bare datetime covers the one-shot case. */
+function ReminderEditor({
+  reminders,
+  onChange,
+}: {
+  reminders: Reminder[];
+  onChange: (r: Reminder[]) => void;
+}) {
+  const add = (): void => {
+    const at = new Date(Date.now() + 3_600_000);
+    at.setMinutes(0, 0, 0);
+    onChange([...reminders, { at: at.toISOString(), status: 'active' }]);
+  };
+  const patch = (i: number, next: Partial<Reminder>): void =>
+    onChange(reminders.map((r, j) => (j === i ? { ...r, ...next } : r)));
+  const remove = (i: number): void => onChange(reminders.filter((_, j) => j !== i));
+
+  return (
+    <div className="reminder-editor">
+      {reminders.map((r, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: reminders have no id; index is stable within an edit session
+        <div className="reminder-row" key={i}>
+          <input
+            type="datetime-local"
+            value={isoToLocalInput(r.at)}
+            onChange={(e) => e.target.value && patch(i, { at: localInputToIso(e.target.value) })}
+          />
+          <select
+            value={r.rrule ?? ''}
+            onChange={(e) => {
+              const rrule = e.target.value || undefined;
+              patch(i, rrule ? { rrule } : { rrule: undefined });
+            }}
+          >
+            {RRULE_PRESETS.map((p) => (
+              <option key={p.label} value={p.rrule ?? ''}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="ghost danger" onClick={() => remove(i)}>
+            ✕
+          </button>
+        </div>
+      ))}
+      <button type="button" className="ghost add-reminder" onClick={add}>
+        + reminder
+      </button>
+    </div>
+  );
+}
+
 export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => void }) {
   const [body, setBody] = useState(doc.body);
   const [axes, setAxes] = useState<AxisValues>({
@@ -270,11 +412,13 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
   // whole editing session: the outbox coalesces repeat saves, and a re-save
   // on top of our own acked edit merges cleanly (ours is a subset of theirs).
   const [baseRev] = useState(doc.rev);
-  const [saved, setSaved] = useState<{ body: string } & AxisValues>({
+  const [reminders, setReminders] = useState<Reminder[]>(doc.reminders);
+  const [saved, setSaved] = useState({
     body: doc.body,
     durability: doc.durability,
     formality: doc.formality,
     importance: doc.importance,
+    reminders: JSON.stringify(doc.reminders),
   });
   const [busy, setBusy] = useState(false);
   const [editorMode, setEditorMode] = useState<'rich' | 'raw'>(() =>
@@ -284,7 +428,8 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
     body !== saved.body ||
     axes.durability !== saved.durability ||
     axes.formality !== saved.formality ||
-    axes.importance !== saved.importance;
+    axes.importance !== saved.importance ||
+    JSON.stringify(reminders) !== saved.reminders;
 
   const toggleMode = (): void => {
     const next = editorMode === 'rich' ? 'raw' : 'rich';
@@ -296,8 +441,8 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
     if (!dirty || busy) return;
     setBusy(true);
     try {
-      await saveDoc(doc.id, baseRev, { body, ...axes });
-      setSaved({ body, ...axes });
+      await saveDoc(doc.id, baseRev, { body, ...axes, reminders });
+      setSaved({ body, ...axes, reminders: JSON.stringify(reminders) });
     } catch (e) {
       flashNotice(e instanceof Error ? `Save failed: ${e.message}` : 'Save failed');
     } finally {
@@ -336,6 +481,7 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
       <div className="editor" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <NoteEditor key={editorMode} value={body} onChange={setBody} mode={editorMode} autoFocus />
         <AxisPicker value={axes} onChange={setAxes} />
+        <ReminderEditor reminders={reminders} onChange={setReminders} />
         <div className="editor-actions">
           <button type="button" className="ghost danger" onClick={() => void del()}>
             Delete

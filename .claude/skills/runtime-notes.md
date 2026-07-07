@@ -1,3 +1,23 @@
+## session: M2a reminders + agenda [forge-plan-d4] — 2026-07-07
+
+Purpose: reminder engine (rrule recurrence), agenda view, set/done/snooze UI.
+
+Insights:
+- CJS-only deps break DIFFERENTLY across our three JS runtimes: `import
+  { RRule } from 'rrule'` passed vitest (esbuild interop) and vite, but
+  CRASHED the server on boot under tsx ("does not provide an export named").
+  Green tests, dead server. Fix: default-import form `import rrule from
+  'rrule'; const { RRule } = rrule`. Lesson: for any CJS dep, boot the actual
+  server (tsx), don't trust that vitest passing means it loads.
+- The reminder model rolls a recurring reminder forward on "done" (at = next
+  occurrence, stays active) instead of needing a per-occurrence completion
+  table. One-shots just flip to status done. No new schema.
+- Agenda is a pure core function (buildAgenda) over the already-synced
+  corpus; done/snooze go through the same saveDoc/outbox path as any edit, so
+  they work offline for free.
+
+---
+
 ## session: M1 complete, Keep replacement [forge-plan-d4] — 2026-07-07
 
 Purpose: build all of M1 (offline outbox, saved views + mobile bottom bar,

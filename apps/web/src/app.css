@@ -422,6 +422,110 @@ button.danger {
   align-items: center;
 }
 
+button.ghost.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.reminder-editor {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.reminder-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.reminder-row input[type="datetime-local"],
+.reminder-row select {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  color-scheme: dark light;
+}
+
+.reminder-row input[type="datetime-local"] {
+  flex: 1;
+}
+
+.add-reminder {
+  justify-self: start;
+  color: var(--accent);
+}
+
+.agenda {
+  margin-top: var(--space-4);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.agenda-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.agenda-heading {
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--dim);
+  margin: 0;
+}
+
+.agenda-heading.overdue {
+  color: var(--danger);
+}
+
+.agenda-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
+.agenda-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  min-width: 0;
+}
+
+.agenda-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.agenda-when {
+  font-size: var(--text-sm);
+  color: var(--dim);
+}
+
+.agenda-when.overdue {
+  color: var(--danger);
+}
+
+.agenda-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex: none;
+}
+
 .spacer {
   flex: 1;
 }

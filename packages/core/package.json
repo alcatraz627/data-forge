@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "rrule": "^2.8.1",
     "ulid": "^2.3.0",
     "yaml": "^2.7.0"
   },

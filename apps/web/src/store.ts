@@ -1,9 +1,11 @@
 import {
   CAPTURE_DEFAULTS,
   type CreateDocBody,
+  type Reminder,
   type ServerDoc,
   type SyncStore,
   type UpdateDocBody,
+  completeReminder,
   derivePreview,
   deriveTitle,
   drainOutbox,
@@ -13,6 +15,7 @@ import {
   newId,
   nowIso,
   pullToHead,
+  snoozeReminder,
 } from '@forge/core';
 import { useSyncExternalStore } from 'react';
 import * as api from './api';
@@ -218,6 +221,27 @@ export async function saveDoc(
   await refreshPending();
   rebuild();
   void drainThenPull();
+}
+
+/** Applies a done/snooze action to one reminder on a note and saves. The
+ * reminders array is the unit of edit; core decides how the action mutates it
+ * (roll a recurring reminder forward, mark a one-shot done, set a snooze). */
+export async function actOnReminder(
+  docId: string,
+  reminderIndex: number,
+  action: 'done' | 'snooze',
+  snoozeUntil?: Date,
+): Promise<void> {
+  const doc = byId.get(docId);
+  const current = doc?.reminders[reminderIndex];
+  if (!doc || !current) return;
+  const now = new Date();
+  const next: Reminder =
+    action === 'done'
+      ? completeReminder(current, now)
+      : snoozeReminder(current, snoozeUntil ?? new Date(now.getTime() + 3_600_000));
+  const reminders = doc.reminders.map((r, i) => (i === reminderIndex ? next : r));
+  await saveDoc(docId, doc.rev, { reminders });
 }
 
 export async function removeDoc(id: string): Promise<void> {
