@@ -164,17 +164,31 @@ export default function App() {
         {showStream && (
           <section className="stream">
             {docs.length === 0 ? (
-              <p className="empty">
-                {!snap.loaded
-                  ? 'Connecting…'
-                  : query
-                    ? 'No matches.'
-                    : isMobile && screen === 'search'
-                      ? 'Type to search everything.'
-                      : viewId === 'all'
-                        ? 'Nothing here yet. Drop your first thought above.'
-                        : `Nothing matches ${activeView.name} right now.`}
-              </p>
+              <div className="empty">
+                <Icon name={query || (isMobile && screen === 'search') ? 'search' : 'inbox'} />
+                <p>
+                  {!snap.loaded
+                    ? 'Connecting…'
+                    : query
+                      ? 'No matches'
+                      : isMobile && screen === 'search'
+                        ? 'Search everything'
+                        : viewId === 'all'
+                          ? 'Nothing here yet'
+                          : `Nothing in ${activeView.name}`}
+                </p>
+                {snap.loaded && (
+                  <span className="empty-hint">
+                    {query
+                      ? 'Try a different word.'
+                      : isMobile && screen === 'search'
+                        ? 'Type above to find any note.'
+                        : viewId === 'all'
+                          ? 'Drop your first thought above.'
+                          : 'Notes matching this view will show here.'}
+                  </span>
+                )}
+              </div>
             ) : (
               docs.map((d) => <NoteCard key={d.id} doc={d} onOpen={() => setOpenDoc(d)} />)
             )}

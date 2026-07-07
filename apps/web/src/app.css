@@ -553,6 +553,12 @@ button.danger:hover {
   color: var(--faint);
 }
 
+.empty p {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--dim);
+}
+
 .empty .empty-hint {
   font-size: var(--text-sm);
   color: var(--faint);

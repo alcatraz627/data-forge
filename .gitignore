@@ -16,3 +16,9 @@ dist/
 .claude/session-notes/
 .claude/output/
 _*.claude.md
+
+# fiber-snatcher
+.fiber-snatcher/
+
+# fiber-snatcher dev tooling (local only)
+.fiber-snatcher/

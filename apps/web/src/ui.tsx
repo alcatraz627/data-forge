@@ -357,7 +357,13 @@ export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: strin
   };
 
   if (entries.length === 0) {
-    return <p className="empty">Nothing scheduled. Add a reminder from any note.</p>;
+    return (
+      <div className="empty">
+        <Icon name="calendar" />
+        <p>Nothing scheduled</p>
+        <span className="empty-hint">Add a reminder from any note.</span>
+      </div>
+    );
   }
 
   return (
