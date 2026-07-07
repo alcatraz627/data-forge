@@ -1,3 +1,34 @@
+## session: M6 UI lift [forge-plan-d4] — 2026-07-08
+
+Purpose: full visual redesign of the web app (user: "the UI still needs a big
+lift"). Mobile-first, editor was the worst surface.
+
+Insights:
+- Direction converged in two rounds: shipped warm-editorial (serif + amber),
+  user said "too warm / too much, all sans" → retuned to neutral charcoal/paper
+  + one sans family + colour only on accent+importance. Lesson: show pixels,
+  let the user steer the taste; don't over-commit to the first aesthetic.
+- The redesign is token-driven: tokens.json (palette/type/space) → tokens.css +
+  ForgeTokens.kt. A palette/type overhaul is one token file + the CSS-var
+  stylesheet; markup only changed for icons + data-attributes (data-importance
+  on cards, data-axis/data-value on segmented axis chips).
+- Real bug the redesign surfaced: a global `button { justify-content: center }`
+  centered every grid/flex button's content — the note-card titles rendered
+  centered. Grid/flex buttons that carry a layout (.card, .agenda-main,
+  .history-row) must reset justify-content. Caught only by looking at pixels.
+- Agenda overflowed the viewport (text "done"/"tomorrow" buttons too wide, title
+  not shrinking). Fix: icon-btn actions + min-width:0/overflow:hidden on the row.
+- Icons: inline SVG component (feather geometry), no icon font/CDN (offline+CSP).
+  Bonus: icon-btns with title= expose accessible names, which fiber-snatcher's
+  `fs page` reads as targetable intent text.
+- fiber-snatcher V2 wired (`fs init`, .fiber-snatcher/ gitignored, devUrl→:5041).
+  Verified it drives the running server (`fs navigate`/`fs page` return digests +
+  refs), then `fs stop` to avoid an orphan daemon. Caveat: `make dev` wants :5040
+  which the user's launchd server owns — don't run it blind; drive a non-conflict
+  server or override the port.
+
+---
+
 ## session: M4 + M5 autonomous run [forge-plan-d4] — 2026-07-08
 
 Purpose: user set an autonomous goal (finish through M5 while away). Built M4
