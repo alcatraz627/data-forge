@@ -1,10 +1,11 @@
-// rrule ships as CommonJS; a named ESM import ({ RRule }) resolves under
-// esbuild/vite but crashes the server under tsx. The default-import form works
-// across tsx, vite, and vitest alike.
-import rrule from 'rrule';
+// rrule is a dual-package hazard: tsx resolves its CommonJS build (needs a
+// default/namespace import) while rollup resolves its ESM build (needs a named
+// import). A namespace import is the one form that works across tsx, the vite
+// build, and vitest — verified in all three.
+import * as rrulePkg from 'rrule';
 import type { Doc, Reminder } from './types.js';
 
-const { RRule } = rrule;
+const { RRule } = rrulePkg;
 
 /**
  * Reminder scheduling math. A reminder fires at a time, optionally repeating
