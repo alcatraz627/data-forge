@@ -328,6 +328,26 @@ button.danger {
   min-height: 200px;
 }
 
+.editor-canvas {
+  width: min(1100px, 96vw);
+  height: 88vh;
+  grid-template-rows: 1fr auto;
+}
+
+.canvas-surface {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.editor-canvas .canvas-surface {
+  height: auto;
+}
+
 .rich-editor .ProseMirror {
   min-height: 200px;
   max-height: 55vh;

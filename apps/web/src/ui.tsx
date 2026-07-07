@@ -12,11 +12,14 @@ import {
   type ServerDoc,
   type ViewDef,
   buildAgenda,
+  isCanvas,
 } from '@forge/core';
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import * as api from './api';
 import { NoteEditor } from './editor/NoteEditor';
 import { actOnReminder, captureNote, flashNotice, removeDoc, saveDoc } from './store';
+
+const LazyCanvasEditor = lazy(() => import('./editor/CanvasEditor'));
 
 /** ISO instant -> value for a <input type=datetime-local> in local time. */
 function isoToLocalInput(iso: string): string {
@@ -259,6 +262,7 @@ export function Capture({ onSaved }: { onSaved?: () => void }) {
 
 export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }) {
   const tags: string[] = [];
+  if (isCanvas(doc.body)) tags.push('canvas');
   if (doc.rev === 0) tags.push('unsynced');
   if (doc.pinned) tags.push('pinned');
   if (doc.source.startsWith('conflict:')) tags.push('conflict');
@@ -491,6 +495,7 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
   });
   const [busy, setBusy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const canvas = isCanvas(doc.body);
   const [editorMode, setEditorMode] = useState<'rich' | 'raw'>(() =>
     localStorage.getItem('forge-editor-mode') === 'raw' ? 'raw' : 'rich',
   );
@@ -548,9 +553,18 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
       }}
       role="presentation"
     >
-      <div className="editor" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div
+        className={`editor${canvas ? ' editor-canvas' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         {showHistory ? (
           <HistoryPanel docId={doc.id} onPick={setBody} onClose={() => setShowHistory(false)} />
+        ) : canvas ? (
+          <Suspense fallback={<div className="canvas-surface" />}>
+            <LazyCanvasEditor value={body} onChange={setBody} />
+          </Suspense>
         ) : (
           <NoteEditor
             key={editorMode}
@@ -560,15 +574,17 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
             autoFocus
           />
         )}
-        <AxisPicker value={axes} onChange={setAxes} />
-        <ReminderEditor reminders={reminders} onChange={setReminders} />
+        {!canvas && <AxisPicker value={axes} onChange={setAxes} />}
+        {!canvas && <ReminderEditor reminders={reminders} onChange={setReminders} />}
         <div className="editor-actions">
           <button type="button" className="ghost danger" onClick={() => void del()}>
             Delete
           </button>
-          <button type="button" className="ghost" onClick={toggleMode}>
-            {editorMode === 'rich' ? 'raw' : 'rich'}
-          </button>
+          {!canvas && (
+            <button type="button" className="ghost" onClick={toggleMode}>
+              {editorMode === 'rich' ? 'raw' : 'rich'}
+            </button>
+          )}
           <button type="button" className="ghost" onClick={() => void toggleArchive()}>
             {doc.archived ? 'unarchive' : 'archive'}
           </button>

@@ -20,7 +20,8 @@
     "dexie": "^4.0.11",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "tiptap-markdown": "^0.8.10"
+    "tiptap-markdown": "^0.8.10",
+    "tldraw": "^3.9.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.0",

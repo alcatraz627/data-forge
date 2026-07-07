@@ -9,6 +9,7 @@ import {
   derivePreview,
   deriveTitle,
   drainOutbox,
+  emptyCanvasBody,
   enqueueCreate,
   enqueueDelete,
   enqueueUpdate,
@@ -200,6 +201,41 @@ export async function captureNote(input: Omit<CreateDocBody, 'source' | 'id'>): 
   void drainThenPull();
 }
 
+/** Creates an empty canvas note (a deliberate artifact, so it lands as
+ * working/draft rather than ephemeral scratch) and returns it to open. */
+export async function captureCanvas(): Promise<ServerDoc> {
+  const now = nowIso();
+  const id = newId();
+  const doc: ServerDoc = {
+    id,
+    created: now,
+    updated: now,
+    durability: 'working',
+    formality: 'draft',
+    importance: 'normal',
+    pinned: false,
+    archived: false,
+    reminders: [],
+    source: 'web',
+    body: emptyCanvasBody(),
+    rev: 0,
+    title: 'Canvas',
+    preview: '',
+  };
+  await putLocal(doc);
+  await enqueueCreate(outboxStore, {
+    id,
+    body: doc.body,
+    source: 'web',
+    durability: 'working',
+    formality: 'draft',
+  });
+  await refreshPending();
+  rebuild();
+  void drainThenPull();
+  return doc;
+}
+
 export async function saveDoc(
   id: string,
   baseRev: number,
@@ -217,7 +253,12 @@ export async function saveDoc(
       updated: nowIso(),
     });
   }
-  await enqueueUpdate(outboxStore, id, baseRev, patch);
+  // A note opened before its create synced has baseRev 0; the server requires
+  // baseRev >= 1. Once it has synced there's no concurrent editor, so advancing
+  // to its current rev is safe (the outbox still folds edits into a create
+  // that hasn't drained yet). Guards against editing a just-made canvas/note.
+  const effectiveBase = baseRev >= 1 ? baseRev : Math.max(known?.rev ?? 1, 1);
+  await enqueueUpdate(outboxStore, id, effectiveBase, patch);
   await refreshPending();
   rebuild();
   void drainThenPull();

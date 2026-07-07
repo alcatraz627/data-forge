@@ -1,4 +1,5 @@
 export * from './api.js';
+export * from './canvas.js';
 export * from './frontmatter.js';
 export * from './ids.js';
 export * from './outbox.js';

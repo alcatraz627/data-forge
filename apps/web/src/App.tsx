@@ -1,6 +1,6 @@
 import { DEFAULT_VIEWS, type ServerDoc, type ViewDef, matchesView } from '@forge/core';
 import { useEffect, useMemo, useState } from 'react';
-import { filterDocs, startSync, useForge } from './store';
+import { captureCanvas, filterDocs, startSync, useForge } from './store';
 import {
   Agenda,
   BottomBar,
@@ -115,6 +115,14 @@ export default function App() {
               ⏰ agenda{reminderCount ? ` · ${reminderCount}` : ''}
             </button>
           )}
+          <button
+            type="button"
+            className="ghost"
+            title="New canvas"
+            onClick={() => void captureCanvas().then(setOpenDoc)}
+          >
+            ✎ canvas
+          </button>
           <button type="button" className="ghost" onClick={toggleTheme}>
             {theme === 'dark' ? 'light mode' : 'dark mode'}
           </button>
