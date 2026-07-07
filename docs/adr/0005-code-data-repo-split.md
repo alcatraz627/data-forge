@@ -12,7 +12,7 @@ forever; code need not be.
 
 - Code: `github.com/alcatraz627/data-forge` (public by default; flip anytime).
 - Data: `~/DataForge`, its own git repo, private remote
-  `github.com/alcatraz627/data-forge-data`.
+  `github.com/alcatraz627/data-forge-sync`.
 - The server bootstraps the data dir if missing (`ensureDataDir`), so a fresh
   machine needs no manual setup; remotes are configured by the human/agent
   once.

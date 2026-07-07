@@ -33,7 +33,7 @@ publishing, iOS.
 
 | Date | Decision | Outcome |
 |---|---|---|
-| 2026-07-07 | Backup remote | Private GitHub repo (`data-forge-data`). Code repo is separate and public by default. |
+| 2026-07-07 | Backup remote | Private GitHub repo (`data-forge-sync`, user-renamed from `data-forge-data`). Code repo is separate and public by default. |
 | 2026-07-07 | Code/data repo split | Separate repos. Sync auto-commits (~60s cadence) would drown code history; privacy differs. ADR-0005. |
 | 2026-07-07 | Editor | TipTap as first implementation, locked behind a `NoteEditor` abstraction (markdown in/out) so it is swappable. ADR-0003. |
 | 2026-07-07 | Android approach | No WebView shell. Chrome PWA is the app; a native **companion APK** ships widgets + exact alarms + micro-capture. Must not slow down a Nothing Phone 2: no persistent services, passive widgets only. ADR-0004. |
