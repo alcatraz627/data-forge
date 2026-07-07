@@ -52,6 +52,7 @@ export default function App() {
         <h1>Data Forge</h1>
         <div className="topbar-right">
           {snap.notice && <span className="notice">{snap.notice}</span>}
+          {snap.pending > 0 && <span className="pending">{snap.pending} pending</span>}
           <span
             className={`sync-dot${snap.connected ? ' on' : ''}`}
             title={snap.connected ? 'live sync' : 'reconnecting…'}

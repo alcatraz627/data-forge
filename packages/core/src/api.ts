@@ -22,6 +22,18 @@ export interface ChangeEntry extends DocChange {
 /** Server-side page cap for the change feed; the sync loop keys off it. */
 export const CHANGES_PAGE = 500;
 
+/** An HTTP-level failure with its status attached. Anything else thrown by a
+ * transport (fetch TypeError, abort) is treated as "offline, retry later" by
+ * the sync machinery, so transports must throw this for real server replies. */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 export interface ChangesResponse {
   changes: ChangeEntry[];
   latestSeq: number;

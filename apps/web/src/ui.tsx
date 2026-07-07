@@ -149,6 +149,7 @@ export function Capture() {
 
 export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }) {
   const tags: string[] = [];
+  if (doc.rev === 0) tags.push('unsynced');
   if (doc.pinned) tags.push('pinned');
   if (doc.source.startsWith('conflict:')) tags.push('conflict');
   if (doc.durability !== CAPTURE_DEFAULTS.durability) tags.push(doc.durability);
@@ -181,10 +182,11 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
     formality: doc.formality,
     importance: doc.importance,
   });
-  // The revision these edits are based on — captured at open, advanced only by
-  // our own saves, so a concurrent change elsewhere merge-forks instead of
-  // being overwritten.
-  const [baseRev, setBaseRev] = useState(doc.rev);
+  // The revision these edits are based on — captured at open, so a concurrent
+  // change elsewhere merge-forks instead of being overwritten. Kept for the
+  // whole editing session: the outbox coalesces repeat saves, and a re-save
+  // on top of our own acked edit merges cleanly (ours is a subset of theirs).
+  const [baseRev] = useState(doc.rev);
   const [saved, setSaved] = useState<{ body: string } & AxisValues>({
     body: doc.body,
     durability: doc.durability,
@@ -202,11 +204,8 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
     if (!dirty || busy) return;
     setBusy(true);
     try {
-      const res = await saveDoc(doc.id, baseRev, { body, ...axes });
-      if (res) {
-        setBaseRev(res.doc.rev);
-        setSaved({ body, ...axes });
-      }
+      await saveDoc(doc.id, baseRev, { body, ...axes });
+      setSaved({ body, ...axes });
     } catch (e) {
       flashNotice(e instanceof Error ? `Save failed: ${e.message}` : 'Save failed');
     } finally {

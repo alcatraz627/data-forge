@@ -47,6 +47,12 @@ body {
   text-overflow: ellipsis;
 }
 
+.pending {
+  color: var(--accent);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
 .sync-dot {
   width: 8px;
   height: 8px;

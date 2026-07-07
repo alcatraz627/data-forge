@@ -1,21 +1,14 @@
-import type {
-  ChangesResponse,
-  CreateDocBody,
-  SearchResult,
-  ServerDoc,
-  SyncTransport,
-  UpdateDocBody,
-  UpdateDocResponse,
+import {
+  ApiError,
+  type ChangesResponse,
+  type CreateDocBody,
+  type DrainTransport,
+  type SearchResult,
+  type ServerDoc,
+  type SyncTransport,
+  type UpdateDocBody,
+  type UpdateDocResponse,
 } from '@forge/core';
-
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -43,11 +36,26 @@ export const updateDoc = (id: string, body: UpdateDocBody): Promise<UpdateDocRes
 export const deleteDoc = (id: string): Promise<{ ok: boolean }> =>
   req(`/api/docs/${id}`, { method: 'DELETE' });
 
+export const getDoc = (id: string): Promise<ServerDoc> => req(`/api/docs/${id}`);
+
 export const search = (q: string): Promise<{ results: SearchResult[] }> =>
   req(`/api/search?q=${encodeURIComponent(q)}`);
 
 export const transport: SyncTransport = {
   changes: (since: number): Promise<ChangesResponse> => req(`/api/changes?since=${since}`),
+};
+
+export const drainTransport: DrainTransport = {
+  create: createDoc,
+  update: updateDoc,
+  get: getDoc,
+  remove: async (id: string) => {
+    try {
+      await deleteDoc(id);
+    } catch (e) {
+      if (!(e instanceof ApiError && e.status === 404)) throw e;
+    }
+  },
 };
 
 /** Server-sent change nudges. EventSource reconnects on its own; onState
