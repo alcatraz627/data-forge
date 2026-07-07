@@ -15,6 +15,7 @@ body {
   max-width: 640px;
   margin: 0 auto;
   padding: var(--space-4);
+  padding-bottom: var(--space-6);
 }
 
 .topbar {
@@ -22,12 +23,42 @@ body {
   align-items: center;
   justify-content: space-between;
   padding-block: var(--space-3);
+  gap: var(--space-3);
 }
 
 .topbar h1 {
   font-size: var(--text-lg);
   margin: 0;
   letter-spacing: 0.2px;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.notice {
+  color: var(--dim);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--dim);
+  opacity: 0.5;
+  flex: none;
+}
+
+.sync-dot.on {
+  background: var(--ok);
+  opacity: 1;
 }
 
 button {
@@ -56,6 +87,10 @@ button.ghost {
   background: transparent;
 }
 
+button.danger {
+  color: var(--danger);
+}
+
 .capture {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -65,7 +100,8 @@ button.ghost {
   gap: var(--space-3);
 }
 
-.capture textarea {
+.capture textarea,
+.editor textarea {
   width: 100%;
   resize: vertical;
   background: var(--bg);
@@ -77,10 +113,17 @@ button.ghost {
   min-height: 72px;
 }
 
-.capture textarea:focus {
+.capture textarea:focus,
+.editor textarea:focus,
+.search:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
   border-color: transparent;
+}
+
+.axis-picker {
+  display: grid;
+  gap: var(--space-2);
 }
 
 .axis-row {
@@ -120,12 +163,134 @@ button.ghost {
   justify-content: flex-end;
 }
 
+.search {
+  width: 100%;
+  margin-top: var(--space-4);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+}
+
 .stream {
-  margin-top: var(--space-5);
+  margin-top: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.card:hover {
+  border-color: var(--dim);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.card-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-age {
+  color: var(--dim);
+  font-size: var(--text-sm);
+  flex: none;
+}
+
+.card-preview {
+  color: var(--dim);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.card-tags {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.tag {
+  font-size: 11px;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 var(--space-2);
 }
 
 .empty {
   color: var(--dim);
   text-align: center;
   padding: var(--space-6) 0;
+}
+
+.editor-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 45%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.editor {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  width: min(640px, 100%);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.editor textarea {
+  min-height: 200px;
+}
+
+.editor-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.spacer {
+  flex: 1;
+}
+
+@media (max-width: 520px) {
+  .editor-backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .editor {
+    width: 100%;
+    border-radius: 0;
+    border: none;
+  }
+
+  .editor textarea {
+    flex: 1;
+    min-height: 40vh;
+  }
 }

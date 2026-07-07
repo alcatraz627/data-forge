@@ -3,14 +3,14 @@ import {
   DURABILITY,
   FORMALITY,
   IMPORTANCE,
-  isDocId,
   type Reminder,
   type UpdateDocBody,
+  isDocId,
 } from '@forge/core';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { currentSeq } from './db.js';
 import { ensureDataDir } from './data-dir.js';
+import { currentSeq } from './db.js';
 import { Forge } from './forge.js';
 
 /** Assembles the HTTP surface over a Forge instance. Kept separate from the
@@ -120,7 +120,9 @@ export async function createForgeApp(opts: {
   const forge = new Forge(opts.dataDir, opts);
   const counts = forge.reconcile();
   if (counts.changed > 0 || counts.removed > 0) {
-    console.log(`reconcile: ${counts.files} files, ${counts.changed} changed, ${counts.removed} removed`);
+    console.log(
+      `reconcile: ${counts.files} files, ${counts.changed} changed, ${counts.removed} removed`,
+    );
   }
 
   const app = new Hono();
@@ -158,9 +160,7 @@ export async function createForgeApp(opts: {
   });
 
   app.delete('/api/docs/:id', (c) =>
-    forge.deleteDoc(c.req.param('id'))
-      ? c.json({ ok: true })
-      : c.json({ error: 'not found' }, 404),
+    forge.deleteDoc(c.req.param('id')) ? c.json({ ok: true }) : c.json({ error: 'not found' }, 404),
   );
 
   app.get('/api/events', (c) =>

@@ -1,5 +1,6 @@
-import { CAPTURE_DEFAULTS, DURABILITY, FORMALITY, IMPORTANCE } from '@forge/core';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { filterDocs, startSync, useForge } from './store';
+import { Capture, EditorPanel, NoteCard } from './ui';
 
 type Theme = 'dark' | 'light';
 
@@ -14,66 +15,76 @@ function useTheme(): [Theme, () => void] {
   return [theme, () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))];
 }
 
-function AxisRow({
-  name,
-  steps,
-  active,
-}: {
-  name: string;
-  steps: readonly string[];
-  active: string;
-}) {
-  return (
-    <div className="axis-row">
-      <span className="axis-name">{name}</span>
-      <div className="axis-chips">
-        {steps.map((step) => (
-          <button
-            key={step}
-            type="button"
-            className={`chip${step === active ? ' chip-active' : ''}`}
-          >
-            {step}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const [theme, toggleTheme] = useTheme();
+  const snap = useForge();
+  const [query, setQuery] = useState('');
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  useEffect(() => startSync(), []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+      if (e.key === '/') {
+        e.preventDefault();
+        document.getElementById('search')?.focus();
+      }
+      if (e.key === 'n') {
+        e.preventDefault();
+        document.getElementById('capture')?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const docs = useMemo(() => filterDocs(snap.docs, query), [snap.docs, query]);
+  const openDoc = (openId && snap.docs.find((d) => d.id === openId)) || null;
+
   return (
     <div className="app">
       <header className="topbar">
         <h1>Data Forge</h1>
-        <button type="button" className="ghost" onClick={toggleTheme}>
-          {theme === 'dark' ? 'light mode' : 'dark mode'}
-        </button>
+        <div className="topbar-right">
+          {snap.notice && <span className="notice">{snap.notice}</span>}
+          <span
+            className={`sync-dot${snap.connected ? ' on' : ''}`}
+            title={snap.connected ? 'live sync' : 'reconnecting…'}
+          />
+          <button type="button" className="ghost" onClick={toggleTheme}>
+            {theme === 'dark' ? 'light mode' : 'dark mode'}
+          </button>
+        </div>
       </header>
 
       <main>
-        <section className="capture">
-          <textarea placeholder="Drop a thought…" rows={3} autoFocus />
-          <AxisRow name="durability" steps={DURABILITY} active={CAPTURE_DEFAULTS.durability} />
-          <AxisRow name="formality" steps={FORMALITY} active={CAPTURE_DEFAULTS.formality} />
-          <AxisRow name="importance" steps={IMPORTANCE} active={CAPTURE_DEFAULTS.importance} />
-          <div className="capture-actions">
-            <button
-              type="button"
-              className="primary"
-              disabled
-              title="Capture is not wired to the server yet"
-            >
-              Save
-            </button>
-          </div>
-        </section>
-
+        <Capture />
+        <input
+          id="search"
+          className="search"
+          type="search"
+          placeholder="Search…  ( / )"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
         <section className="stream">
-          <p className="empty">No notes yet. Capture gets wired to the server next.</p>
+          {docs.length === 0 ? (
+            <p className="empty">
+              {!snap.loaded
+                ? 'Connecting…'
+                : query
+                  ? 'No matches.'
+                  : 'Nothing here yet. Drop your first thought above.'}
+            </p>
+          ) : (
+            docs.map((d) => <NoteCard key={d.id} doc={d} onOpen={() => setOpenId(d.id)} />)
+          )}
         </section>
       </main>
+
+      {openDoc && <EditorPanel doc={openDoc} onClose={() => setOpenId(null)} />}
     </div>
   );
 }

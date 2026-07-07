@@ -1,11 +1,15 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import {
+  CAPTURE_DEFAULTS,
   type ChangeEntry,
   type ChangesResponse,
   type CreateDocBody,
-  CAPTURE_DEFAULTS,
   type Doc,
+  type SearchResult,
+  type ServerDoc,
+  type UpdateDocBody,
+  type UpdateDocResponse,
   derivePreview,
   deriveTitle,
   docFromExternal,
@@ -13,11 +17,7 @@ import {
   newId,
   nowIso,
   parseDoc,
-  type SearchResult,
   serializeDoc,
-  type ServerDoc,
-  type UpdateDocBody,
-  type UpdateDocResponse,
 } from '@forge/core';
 import { REV_KEEP, currentSeq, nextSeq, openDb, tx } from './db.js';
 import { Events } from './events.js';
@@ -338,8 +338,15 @@ export class Forge {
     const parsed = parseDoc(text);
     if (parsed) {
       const other = this.rowById(parsed.doc.id);
-      if (other && other.path !== relPath && other.deleted === 0 && existsSync(this.abs(other.path))) {
-        console.warn(`skipping ${relPath}: duplicate id ${parsed.doc.id} (already at ${other.path})`);
+      if (
+        other &&
+        other.path !== relPath &&
+        other.deleted === 0 &&
+        existsSync(this.abs(other.path))
+      ) {
+        console.warn(
+          `skipping ${relPath}: duplicate id ${parsed.doc.id} (already at ${other.path})`,
+        );
         return false;
       }
       const { seq } = this.indexDoc(parsed.doc, relPath, text);

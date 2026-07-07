@@ -115,7 +115,11 @@ describe('parse tolerance', () => {
   });
 
   it('wraps frontmatter-less files via docFromExternal', () => {
-    const doc = docFromExternal('plain note\n', '01J1QG8Z3WABCDEFGHJKMNPQRS', '2026-07-07T10:00:00+05:30');
+    const doc = docFromExternal(
+      'plain note\n',
+      '01J1QG8Z3WABCDEFGHJKMNPQRS',
+      '2026-07-07T10:00:00+05:30',
+    );
     expect(doc.body).toBe('plain note');
     expect(doc.source).toBe('external');
     const roundtripped = parseDoc(serializeDoc(doc));

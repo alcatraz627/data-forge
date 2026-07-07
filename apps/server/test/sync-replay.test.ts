@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ChangesResponse, ServerDoc, UpdateDocResponse } from '@forge/core';
 import { describe, expect, it } from 'vitest';
-import { createForgeApp, type ForgeApp } from '../src/app.js';
+import { type ForgeApp, createForgeApp } from '../src/app.js';
 
 /**
  * The trust test: two simulated devices interleave captures, edits (often

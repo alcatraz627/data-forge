@@ -33,9 +33,11 @@ export class GitBatcher {
 
   flush(): Promise<void> {
     if (this.timer) clearTimeout(this.timer);
-    this.chain = this.chain.then(() => this.commit()).catch((e) => {
-      console.error('git commit failed:', e);
-    });
+    this.chain = this.chain
+      .then(() => this.commit())
+      .catch((e) => {
+        console.error('git commit failed:', e);
+      });
     return this.chain;
   }
 

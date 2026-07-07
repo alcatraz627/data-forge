@@ -2,9 +2,9 @@ import { parse as parseYaml } from 'yaml';
 import {
   CAPTURE_DEFAULTS,
   DURABILITY,
+  type Doc,
   FORMALITY,
   IMPORTANCE,
-  type Doc,
   type Reminder,
 } from './types.js';
 
