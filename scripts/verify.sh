@@ -26,4 +26,13 @@ git -C "$TMP/data" log --oneline | grep -q 'init'
 
 pnpm --filter @forge/web build >/dev/null
 
-echo "verify: OK (typecheck, server boots + data dir bootstraps as git repo, web builds)"
+# Perf budget: the main JS bundle (gzipped) must stay under 250KB, or the
+# capture path starts paying for weight that belongs behind a code-split.
+MAIN_JS="$(ls apps/web/dist/assets/index-*.js | head -1)"
+GZ_BYTES="$(gzip -c "$MAIN_JS" | wc -c | tr -d ' ')"
+if [ "$GZ_BYTES" -gt 256000 ]; then
+  echo "verify: FAIL — main bundle ${GZ_BYTES}B gz exceeds 250KB budget" >&2
+  exit 1
+fi
+
+echo "verify: OK (typecheck, tests, server boots + git bootstrap, web builds, bundle ${GZ_BYTES}B gz < 250KB)"

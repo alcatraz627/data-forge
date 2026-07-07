@@ -47,6 +47,23 @@ lists), labels (as hashtags), and original timestamps; Tasks become notes
 with reminders (completed tasks land archived). Run it once against a fresh
 store — it does not dedup on re-run.
 
+## Backup & restore
+
+The server auto-commits your data (`~/DataForge`) and pushes it to the private
+`data-forge-sync` remote every ~10 minutes and on shutdown (set
+`FORGE_PUSH_REMOTE=""` to disable, or point it at a different remote).
+
+Restore is just a clone plus a reindex — the files are the source of truth, so
+the SQLite index rebuilds itself on first boot:
+
+```bash
+git clone git@github.com:alcatraz627/data-forge-sync.git ~/DataForge
+make deploy   # boots the server; the index rebuilds from the note files
+```
+
+This path is covered by the `restore drill` test (drop the index, reboot, every
+note comes back with search intact).
+
 ## Layout
 
 | Path | What |

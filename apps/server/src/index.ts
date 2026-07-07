@@ -5,7 +5,8 @@
  */
 import { serve } from '@hono/node-server';
 import { createForgeApp } from './app.js';
-import { ARCHIVE_SWEEP_INTERVAL_MS, DAY_MS, config } from './config.js';
+import { ARCHIVE_SWEEP_INTERVAL_MS, BACKUP_PUSH_INTERVAL_MS, DAY_MS, config } from './config.js';
+import { pushBackup } from './gitops.js';
 import { addStaticRoutes } from './static.js';
 import { startWatcher } from './watcher.js';
 
@@ -22,6 +23,12 @@ const archiveTimer = setInterval(() => {
 }, ARCHIVE_SWEEP_INTERVAL_MS);
 archiveTimer.unref();
 
+// Off-site backup: flush pending commits, then push to the private remote.
+const backupTimer = setInterval(() => {
+  void forge.flush().then(() => pushBackup(config.dataDir, config.pushRemote));
+}, BACKUP_PUSH_INTERVAL_MS);
+backupTimer.unref();
+
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`forge-server listening on :${info.port} (data: ${config.dataDir})`);
 });
@@ -32,6 +39,7 @@ async function shutdown(): Promise<void> {
   shuttingDown = true;
   await watcher.close();
   await forge.flush();
+  await pushBackup(config.dataDir, config.pushRemote);
   server.close();
   process.exit(0);
 }

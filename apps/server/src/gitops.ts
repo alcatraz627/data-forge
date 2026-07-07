@@ -7,6 +7,24 @@ export const git = async (dir: string, ...args: string[]): Promise<string> =>
   (await exec('git', ['-C', dir, ...args])).stdout;
 
 /**
+ * Pushes the data repo to its backup remote, best-effort. Off-site history is
+ * the whole point (ADR-0005); a failed push (offline, auth) is logged and
+ * retried next cycle, never fatal. Skips silently when the remote isn't
+ * configured, so a fresh machine without a remote just runs local-only.
+ */
+export async function pushBackup(dir: string, remote: string): Promise<'pushed' | 'skip' | 'fail'> {
+  try {
+    const remotes = await git(dir, 'remote');
+    if (!remotes.split('\n').includes(remote)) return 'skip';
+    await git(dir, 'push', remote, 'HEAD:main');
+    return 'pushed';
+  } catch (e) {
+    console.error('backup push failed (will retry):', (e as Error).message.split('\n')[0]);
+    return 'fail';
+  }
+}
+
+/**
  * Turns a stream of doc writes into batched git commits: history stays
  * readable (one commit per burst of activity, not per keystroke) and the
  * process can flush on shutdown so nothing is left uncommitted.
