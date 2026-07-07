@@ -1,0 +1,18 @@
+# dependencies / build output
+node_modules/
+dist/
+*.log
+*.tsbuildinfo
+
+# environment / OS
+.env
+.env.*
+.DS_Store
+
+# agent session artifacts (never committed; see global conventions)
+**/.playwright-mcp/
+.claude/wal.jsonl
+.claude/wal.md
+.claude/session-notes/
+.claude/output/
+_*.claude.md

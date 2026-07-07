@@ -1,0 +1,9 @@
+{
+  "name": "Data Forge",
+  "short_name": "Forge",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#131110",
+  "theme_color": "#131110",
+  "icons": []
+}

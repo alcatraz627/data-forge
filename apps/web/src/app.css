@@ -1,0 +1,131 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: var(--space-3);
+}
+
+.topbar h1 {
+  font-size: var(--text-lg);
+  margin: 0;
+  letter-spacing: 0.2px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+}
+
+button.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.ghost {
+  background: transparent;
+}
+
+.capture {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.capture textarea {
+  width: 100%;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font: inherit;
+  min-height: 72px;
+}
+
+.capture textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.axis-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.axis-name {
+  color: var(--dim);
+  font-size: var(--text-sm);
+  width: 84px;
+  flex: none;
+}
+
+.axis-chips {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-size: var(--text-sm);
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  color: var(--dim);
+}
+
+.chip-active {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: transparent;
+}
+
+.capture-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.stream {
+  margin-top: var(--space-5);
+}
+
+.empty {
+  color: var(--dim);
+  text-align: center;
+  padding: var(--space-6) 0;
+}

@@ -1,0 +1,14 @@
+{
+  "name": "data-forge",
+  "private": true,
+  "packageManager": "pnpm@11.10.0",
+  "scripts": {
+    "dev": "pnpm --filter @forge/tokens build && pnpm -r --parallel dev",
+    "typecheck": "pnpm -r typecheck",
+    "verify": "bash scripts/verify.sh",
+    "format": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4"
+  }
+}
