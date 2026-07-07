@@ -26,7 +26,7 @@ import {
 } from '@forge/core';
 import { REV_KEEP, currentSeq, nextSeq, openDb, tx } from './db.js';
 import { Events } from './events.js';
-import { GitBatcher } from './gitops.js';
+import { GitBatcher, git } from './gitops.js';
 import { mergeBodies } from './merge.js';
 import { SelfWrites, atomicWrite, docRelPath, removeFile, sha256 } from './store.js';
 
@@ -474,6 +474,36 @@ export class Forge {
       archived += 1;
     }
     return archived;
+  }
+
+  /** The commit history of one note's file, newest first. The data dir is a
+   * git repo (ADR-0001), so every past version is recoverable — this exposes
+   * that to the app without the client ever touching git. Pending (uncommitted)
+   * edits are flushed first so the latest state shows. */
+  async history(id: string): Promise<Array<{ commit: string; date: string; message: string }>> {
+    const row = this.rowById(id);
+    if (!row) return [];
+    await this.batcher.flush();
+    const out = await git(this.dataDir, 'log', '--format=%H%x1f%aI%x1f%s', '--', row.path);
+    return out
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [commit, date, message] = line.split('\x1f');
+        return { commit: commit ?? '', date: date ?? '', message: message ?? '' };
+      });
+  }
+
+  /** The note's body as it stood at a given commit, for preview/restore. */
+  async revisionAt(id: string, commit: string): Promise<string | null> {
+    const row = this.rowById(id);
+    if (!row || !/^[0-9a-f]{7,40}$/.test(commit)) return null;
+    try {
+      const text = await git(this.dataDir, 'show', `${commit}:${row.path}`);
+      return parseDoc(text)?.doc.body ?? text;
+    } catch {
+      return null;
+    }
   }
 
   flush(): Promise<void> {

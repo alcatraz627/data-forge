@@ -170,6 +170,15 @@ export async function createForgeApp(opts: {
     return doc ? c.json(doc) : c.json({ error: 'not found' }, 404);
   });
 
+  app.get('/api/docs/:id/history', async (c) =>
+    c.json({ history: await forge.history(c.req.param('id')) }),
+  );
+
+  app.get('/api/docs/:id/history/:commit', async (c) => {
+    const body = await forge.revisionAt(c.req.param('id'), c.req.param('commit'));
+    return body === null ? c.json({ error: 'not found' }, 404) : c.json({ body });
+  });
+
   app.post('/api/docs', async (c) => {
     const parsed = parseCreate(await jsonBody(c.req.raw));
     if ('error' in parsed) return c.json({ error: parsed.error }, 400);

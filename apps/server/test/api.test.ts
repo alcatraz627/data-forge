@@ -251,6 +251,31 @@ describe('auto-archive sweep', () => {
   });
 });
 
+describe('per-note history', () => {
+  it('lists commits for a note and reads its body at an old revision', async () => {
+    const fa = await makeApp();
+    const doc = await create(fa, 'version one');
+    await fa.forge.flush();
+    await update(fa, doc.id, { baseRev: 1, body: 'version two' });
+    await fa.forge.flush();
+
+    const hist = await (await fa.app.request(`/api/docs/${doc.id}/history`)).json();
+    expect(hist.history.length).toBeGreaterThanOrEqual(2);
+
+    // Oldest commit holds the original body.
+    const oldest = hist.history[hist.history.length - 1].commit;
+    const rev = await (await fa.app.request(`/api/docs/${doc.id}/history/${oldest}`)).json();
+    expect(rev.body).toBe('version one');
+  });
+
+  it('rejects a malformed commit ref', async () => {
+    const fa = await makeApp();
+    const doc = await create(fa, 'x');
+    const res = await fa.app.request(`/api/docs/${doc.id}/history/not-a-hash`);
+    expect(res.status).toBe(404);
+  });
+});
+
 describe('agenda + reminder endpoints', () => {
   it('serves an agenda and completes a reminder over HTTP', async () => {
     const fa = await makeApp();

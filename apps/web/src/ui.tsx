@@ -14,6 +14,7 @@ import {
   buildAgenda,
 } from '@forge/core';
 import { useEffect, useRef, useState } from 'react';
+import * as api from './api';
 import { NoteEditor } from './editor/NoteEditor';
 import { actOnReminder, captureNote, flashNotice, removeDoc, saveDoc } from './store';
 
@@ -347,6 +348,74 @@ export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: strin
   );
 }
 
+/** Browses a note's git history and drops an older version back into the
+ * editor (as an unsaved edit, so restoring is just Save). Read-only until you
+ * pick one; the git repo is the source, so nothing here can lose data. */
+function HistoryPanel({
+  docId,
+  onPick,
+  onClose,
+}: {
+  docId: string;
+  onPick: (body: string) => void;
+  onClose: () => void;
+}) {
+  const [entries, setEntries] = useState<api.HistoryEntry[] | null>(null);
+
+  useEffect(() => {
+    api
+      .history(docId)
+      .then((r) => setEntries(r.history))
+      .catch(() => setEntries([]));
+  }, [docId]);
+
+  const restore = async (commit: string): Promise<void> => {
+    try {
+      const { body } = await api.revisionAt(docId, commit);
+      onPick(body);
+      flashNotice('Old version loaded — Save to keep it');
+      onClose();
+    } catch {
+      flashNotice('Could not load that version');
+    }
+  };
+
+  return (
+    <div className="history-panel">
+      <div className="history-head">
+        <span>History</span>
+        <button type="button" className="ghost" onClick={onClose}>
+          close
+        </button>
+      </div>
+      {entries === null ? (
+        <p className="empty">Loading…</p>
+      ) : entries.length === 0 ? (
+        <p className="empty">No history yet.</p>
+      ) : (
+        entries.map((e) => (
+          <button
+            key={e.commit}
+            type="button"
+            className="history-row"
+            onClick={() => void restore(e.commit)}
+          >
+            <span className="history-when">
+              {new Date(e.date).toLocaleString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+              })}
+            </span>
+            <span className="history-msg">{e.message}</span>
+          </button>
+        ))
+      )}
+    </div>
+  );
+}
+
 /** Add, retime, or remove reminders on the note being edited. Recurrence is a
  * small set of presets; a bare datetime covers the one-shot case. */
 function ReminderEditor({
@@ -421,6 +490,7 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
     reminders: JSON.stringify(doc.reminders),
   });
   const [busy, setBusy] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [editorMode, setEditorMode] = useState<'rich' | 'raw'>(() =>
     localStorage.getItem('forge-editor-mode') === 'raw' ? 'raw' : 'rich',
   );
@@ -479,7 +549,17 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
       role="presentation"
     >
       <div className="editor" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <NoteEditor key={editorMode} value={body} onChange={setBody} mode={editorMode} autoFocus />
+        {showHistory ? (
+          <HistoryPanel docId={doc.id} onPick={setBody} onClose={() => setShowHistory(false)} />
+        ) : (
+          <NoteEditor
+            key={editorMode}
+            value={body}
+            onChange={setBody}
+            mode={editorMode}
+            autoFocus
+          />
+        )}
         <AxisPicker value={axes} onChange={setAxes} />
         <ReminderEditor reminders={reminders} onChange={setReminders} />
         <div className="editor-actions">
@@ -491,6 +571,13 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
           </button>
           <button type="button" className="ghost" onClick={() => void toggleArchive()}>
             {doc.archived ? 'unarchive' : 'archive'}
+          </button>
+          <button
+            type="button"
+            className={`ghost${showHistory ? ' active' : ''}`}
+            onClick={() => setShowHistory((h) => !h)}
+          >
+            history
           </button>
           <span className="spacer" />
           <button type="button" onClick={maybeClose}>

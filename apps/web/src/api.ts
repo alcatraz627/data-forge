@@ -41,6 +41,18 @@ export const getDoc = (id: string): Promise<ServerDoc> => req(`/api/docs/${id}`)
 export const search = (q: string): Promise<{ results: SearchResult[] }> =>
   req(`/api/search?q=${encodeURIComponent(q)}`);
 
+export interface HistoryEntry {
+  commit: string;
+  date: string;
+  message: string;
+}
+
+export const history = (id: string): Promise<{ history: HistoryEntry[] }> =>
+  req(`/api/docs/${id}/history`);
+
+export const revisionAt = (id: string, commit: string): Promise<{ body: string }> =>
+  req(`/api/docs/${id}/history/${commit}`);
+
 export const transport: SyncTransport = {
   changes: (since: number): Promise<ChangesResponse> => req(`/api/changes?since=${since}`),
 };
