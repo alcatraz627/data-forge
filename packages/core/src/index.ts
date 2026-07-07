@@ -6,3 +6,4 @@ export * from './sync.js';
 export * from './time.js';
 export * from './title.js';
 export * from './types.js';
+export * from './views.js';

@@ -7,9 +7,83 @@ import {
   IMPORTANCE,
   type Importance,
   type ServerDoc,
+  type ViewDef,
 } from '@forge/core';
 import { useEffect, useRef, useState } from 'react';
 import { captureNote, flashNotice, removeDoc, saveDoc } from './store';
+
+export type MobileScreen = 'notes' | 'search' | 'capture';
+
+export function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const onChange = (): void => setMobile(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return mobile;
+}
+
+export function ViewChips({
+  views,
+  active,
+  counts,
+  onPick,
+}: {
+  views: readonly ViewDef[];
+  active: string;
+  counts: Record<string, number>;
+  onPick: (id: string) => void;
+}) {
+  return (
+    <div className="view-chips">
+      {views
+        .filter((v) => v.id !== 'conflicts' || (counts[v.id] ?? 0) > 0)
+        .map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            className={`chip view-chip${v.id === active ? ' chip-active' : ''}`}
+            onClick={() => onPick(v.id)}
+          >
+            {v.name}
+            {counts[v.id] ? ` · ${counts[v.id]}` : ''}
+          </button>
+        ))}
+    </div>
+  );
+}
+
+/** Thumb-zone navigation for phones; hidden on desktop where the whole app
+ * fits one column and the keyboard does the traveling. */
+export function BottomBar({
+  screen,
+  onPick,
+}: {
+  screen: MobileScreen;
+  onPick: (s: MobileScreen) => void;
+}) {
+  const tabs: Array<[MobileScreen, string]> = [
+    ['notes', 'Notes'],
+    ['search', 'Search'],
+    ['capture', 'New'],
+  ];
+  return (
+    <nav className="bottom-bar">
+      {tabs.map(([s, label]) => (
+        <button
+          key={s}
+          type="button"
+          className={`tab${s === screen ? ' tab-active' : ''}`}
+          onClick={() => onPick(s)}
+        >
+          {label}
+        </button>
+      ))}
+    </nav>
+  );
+}
 
 export interface AxisValues {
   durability: Durability;
@@ -91,7 +165,7 @@ export function AxisPicker({
 
 /** The drop-a-thought box. Drafts persist across reloads so a half-typed
  * thought is never lost to a stray tab close. */
-export function Capture() {
+export function Capture({ onSaved }: { onSaved?: () => void }) {
   const [text, setText] = useState(() => localStorage.getItem('forge-draft') ?? '');
   const [axes, setAxes] = useState<AxisValues>({ ...CAPTURE_DEFAULTS });
   const [busy, setBusy] = useState(false);
@@ -109,8 +183,13 @@ export function Capture() {
     try {
       await captureNote({ body, ...axes });
       setText('');
+      // Cleared directly, not via the persistence effect: a save that
+      // unmounts this component (mobile screen switch) would otherwise leave
+      // the stale draft behind to resurface on the next mount.
+      localStorage.removeItem('forge-draft');
       setAxes({ ...CAPTURE_DEFAULTS });
-      ref.current?.focus();
+      if (onSaved) onSaved();
+      else ref.current?.focus();
     } catch (e) {
       flashNotice(e instanceof Error ? `Save failed: ${e.message}` : 'Save failed');
     } finally {

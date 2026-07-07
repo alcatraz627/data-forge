@@ -180,10 +180,65 @@ button.danger {
   font: inherit;
 }
 
+.view-chips {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-4);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.view-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.view-chip {
+  white-space: nowrap;
+  flex: none;
+  background: var(--surface);
+}
+
+.view-chip.chip-active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
 .stream {
   margin-top: var(--space-4);
   display: grid;
   gap: var(--space-2);
+}
+
+.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: var(--space-1) var(--space-2) calc(var(--space-1) + env(safe-area-inset-bottom));
+  z-index: 10;
+}
+
+.bottom-bar .tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: var(--space-2);
+  color: var(--dim);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
+}
+
+.bottom-bar .tab-active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.app-mobile main {
+  padding-bottom: 84px;
 }
 
 .card {
