@@ -317,8 +317,8 @@ calendar promises.
 
 | # | Scope | Effort | You can now… |
 |---|---|---|---|
-| M0 | Server store (CRUD + git commits + FTS + changes feed + SSE) + web capture/stream/search/edit + PWA + tailscale serve + launchd | ~1 weekend | Capture and search from both devices' browsers |
-| M1 | Offline (Dexie + outbox + SW), axes + saved views, TipTap behind NoteEditor, Keep + Tasks importer, auto-archive | 3-4 ev | Stop using Keep; history migrated |
+| M0 ✅ | Server store (CRUD + git commits + FTS + changes feed + SSE) + web capture/stream/search/edit + PWA + tailscale serve + launchd | done | Capture and search from both devices' browsers |
+| M1 ✅ | Offline (Dexie + outbox + SW), axes + saved views, TipTap behind NoteEditor, Keep + Tasks importer, auto-archive | done | Stop using Keep; history migrated |
 | M2 | Reminders (model + agenda + web push interim) + SwiftBar menu bar | 3-4 ev | Stop using Google Tasks (web-push fidelity) |
 | M3 | Companion APK: Glance widgets, micro-capture, exact alarms, notification actions, QS tile | 4-6 ev | Home-screen parity with Keep, faster; bulletproof reminders |
 | M4 | Conflict inbox, per-note history (git log), attachments/photos, backup + restore drill, perf pass | ~3 ev | Trust it with everything |

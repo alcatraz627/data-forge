@@ -1,3 +1,32 @@
+## session: M1 complete, Keep replacement [forge-plan-d4] — 2026-07-07
+
+Purpose: build all of M1 (offline outbox, saved views + mobile bottom bar,
+TipTap editor, auto-archive lifecycle, Keep/Tasks importer).
+
+Insights:
+- Adding a DB column needs an explicit migration: CREATE TABLE IF NOT EXISTS
+  never evolves an existing table, so the new `archived` column threw "SQL
+  logic error" on insert against the pre-existing index. openDb now does an
+  additive ALTER TABLE ADD COLUMN (pragma table_info gate), preserving seq
+  and merge bases rather than rebuilding. Caught only by booting the new
+  build against the OLD index — always exercise a migration against real
+  prior state, not a fresh dir.
+- Importers need to preserve source timestamps: createDoc stamped now(),
+  which would misorder a Keep history. Added optional created/updated to the
+  create contract; import is the load-bearing caller (don't add it
+  speculatively, but here there's a real caller).
+- Chrome DevTools MCP evaluate_script with a Promise + setTimeout chain hits
+  the protocol timeout. Drive multi-step UI with separate click/snapshot
+  calls, or a single synchronous evaluate. Controlled-input fill still needs
+  the native-setter + input-event trick to reach React state.
+- Swapping data dirs under the same origin:port leaves stale IndexedDB
+  (cursor + cached docs) that desyncs the client. Clear IndexedDB between
+  backend swaps in tests; not a production concern (backend never swaps).
+- Keep the importer a POST-to-running-server (one writer) rather than a
+  second process opening the same SQLite index.
+
+---
+
 ## session: M0 build, plan to working app [forge-plan-d4] — 2026-07-07
 
 Purpose: choose stack, scaffold monorepo, build full M0 (server store, web
