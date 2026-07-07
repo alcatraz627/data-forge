@@ -1,7 +1,9 @@
-/* Data Forge — warm editorial UI.
-   Reading surfaces use a serif (--font-read); chrome uses the UI sans. Colour is
-   spent sparingly: the accent marks intent, importance drives weight + a hot/cool
-   tag scale, everything else stays warm-neutral so the page reads calm. */
+/* Data Forge — neutral, minimal UI.
+   One sans family throughout; hierarchy comes from size/weight/space, not a
+   second typeface. Colour is spent sparingly: a restrained accent marks intent,
+   importance drives title weight + a muted rail, everything else stays neutral
+   so the page reads calm. Structure (rails, icon chrome, the editor sheet) does
+   the work that colour used to. */
 
 :root {
   --shadow-1: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 14px rgb(0 0 0 / 22%);
@@ -513,24 +515,22 @@ button.danger:hover {
   height: 0.95em;
 }
 
+/* Importance + reminder spend colour on the TEXT only; the pill stays neutral
+   so the page reads calm (minimal direction). */
 .tag[data-kind="importance"][data-value="high"] {
   color: var(--imp-high);
-  background: color-mix(in srgb, var(--imp-high) 15%, transparent);
 }
 
 .tag[data-kind="importance"][data-value="critical"] {
   color: var(--imp-critical);
-  background: color-mix(in srgb, var(--imp-critical) 16%, transparent);
 }
 
 .tag[data-kind="reminder"] {
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .tag[data-kind="reminder"][data-overdue="true"] {
   color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 15%, transparent);
 }
 
 .tag[data-kind="canvas"] {
@@ -878,8 +878,10 @@ button.ghost.active {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   box-shadow: var(--shadow-1);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .agenda-item .agenda-dot {

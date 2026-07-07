@@ -367,25 +367,35 @@ export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: strin
           <div className="agenda-group" key={name}>
             <h2 className={`agenda-heading${name === 'Overdue' ? ' overdue' : ''}`}>{name}</h2>
             {list.map((e) => (
-              <div className="agenda-item" key={`${e.docId}:${e.reminderIndex}`}>
+              <div
+                className={`agenda-item${e.overdue ? ' is-overdue' : ''}`}
+                key={`${e.docId}:${e.reminderIndex}`}
+              >
+                <span className="agenda-dot" />
                 <button type="button" className="agenda-main" onClick={() => onOpen(e.docId)}>
                   <span className="agenda-title">{e.title}</span>
                   <span className={`agenda-when${e.overdue ? ' overdue' : ''}`}>
                     {reminderLabel(e.at)}
-                    {e.recurring ? ' ↻' : ''}
-                    {e.snoozed ? ' 💤' : ''}
+                    {e.recurring && <Icon name="history" />}
+                    {e.snoozed && <Icon name="snooze" />}
                   </span>
                 </button>
                 <div className="agenda-actions">
-                  <button type="button" className="ghost" onClick={() => void act(e, 'done')}>
-                    done
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title="Mark done"
+                    onClick={() => void act(e, 'done')}
+                  >
+                    <Icon name="check" />
                   </button>
                   <button
                     type="button"
-                    className="ghost"
+                    className="icon-btn"
+                    title="Snooze to tomorrow"
                     onClick={() => void act(e, 'snooze', new Date(Date.now() + 24 * 3_600_000))}
                   >
-                    tomorrow
+                    <Icon name="snooze" />
                   </button>
                 </div>
               </div>
