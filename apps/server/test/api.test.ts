@@ -251,6 +251,44 @@ describe('auto-archive sweep', () => {
   });
 });
 
+describe('agenda + reminder endpoints', () => {
+  it('serves an agenda and completes a reminder over HTTP', async () => {
+    const fa = await makeApp();
+    await create(fa, 'far future', {
+      reminders: [{ at: '2027-01-01T09:00:00+05:30', status: 'active' }],
+    });
+    const due = await create(fa, 'due soon', {
+      reminders: [{ at: new Date(Date.now() + 3_600_000).toISOString(), status: 'active' }],
+    });
+
+    const agenda = await (await fa.app.request('/api/agenda')).json();
+    // far-future reminder is beyond the 30-day horizon; only "due soon" shows.
+    expect(agenda.entries).toHaveLength(1);
+    expect(agenda.entries[0].docId).toBe(due.id);
+
+    const res = await fa.app.request(`/api/reminders/complete?doc=${due.id}&index=0`, {
+      method: 'POST',
+    });
+    expect(res.status).toBe(200);
+    const doc = (await res.json()) as ServerDoc;
+    expect(doc.reminders[0]?.status).toBe('done');
+
+    const after = await (await fa.app.request('/api/agenda')).json();
+    expect(after.entries).toHaveLength(0);
+  });
+
+  it('rejects bad complete params', async () => {
+    const fa = await makeApp();
+    expect(
+      (await fa.app.request('/api/reminders/complete?index=0', { method: 'POST' })).status,
+    ).toBe(400);
+    const missing = await fa.app.request('/api/reminders/complete?doc=01MISSING&index=0', {
+      method: 'POST',
+    });
+    expect(missing.status).toBe(404);
+  });
+});
+
 describe('git batching', () => {
   it('commits accepted writes and leaves the repo clean', async () => {
     const fa = await makeApp();

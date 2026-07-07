@@ -154,6 +154,17 @@ export async function createForgeApp(opts: {
 
   app.get('/api/search', (c) => c.json({ results: forge.search(c.req.query('q') ?? '') }));
 
+  app.get('/api/agenda', (c) => c.json({ entries: forge.agenda(new Date()) }));
+
+  app.post('/api/reminders/complete', (c) => {
+    const docId = c.req.query('doc') ?? '';
+    const index = Number(c.req.query('index'));
+    if (!docId || !Number.isInteger(index) || index < 0)
+      return c.json({ error: 'bad params' }, 400);
+    const doc = forge.completeReminderAt(docId, index, new Date());
+    return doc ? c.json(doc) : c.json({ error: 'not found' }, 404);
+  });
+
   app.get('/api/docs/:id', (c) => {
     const doc = forge.getDoc(c.req.param('id'));
     return doc ? c.json(doc) : c.json({ error: 'not found' }, 404);

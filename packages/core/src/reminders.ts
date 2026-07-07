@@ -21,7 +21,7 @@ export function effectiveFireAt(reminder: Reminder): string {
   return reminder.at;
 }
 
-function rule(reminder: Reminder): RRule | null {
+function rule(reminder: Reminder): InstanceType<typeof RRule> | null {
   if (!reminder.rrule) return null;
   try {
     const opts = RRule.parseString(reminder.rrule);

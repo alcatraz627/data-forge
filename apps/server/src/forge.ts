@@ -1,16 +1,20 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import {
+  type AgendaEntry,
   CAPTURE_DEFAULTS,
   CHANGES_PAGE,
   type ChangeEntry,
   type ChangesResponse,
   type CreateDocBody,
   type Doc,
+  type Reminder,
   type SearchResult,
   type ServerDoc,
   type UpdateDocBody,
   type UpdateDocResponse,
+  buildAgenda,
+  completeReminder,
   derivePreview,
   deriveTitle,
   docFromExternal,
@@ -413,6 +417,36 @@ export class Forge {
       }
     }
     return { files, changed, removed };
+  }
+
+  /** The time-sorted agenda of active reminders across live notes, computed
+   * server-side so the recurrence math has one home (menu bar, future push,
+   * and web all consume this). */
+  agenda(now: Date): AgendaEntry[] {
+    const rows = this.db
+      .prepare(
+        "SELECT id, title, reminders FROM docs WHERE deleted = 0 AND archived = 0 AND reminders != '[]'",
+      )
+      .all() as unknown as Array<{ id: string; title: string; reminders: string }>;
+    const docs = rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      reminders: JSON.parse(r.reminders) as Reminder[],
+    }));
+    return buildAgenda(docs, now);
+  }
+
+  /** Applies a "done" to one reminder on a note (rolls a recurring reminder
+   * forward, marks a one-shot done) and persists it through the normal write
+   * path. Used by the menu bar; the web app does this client-side. */
+  completeReminderAt(docId: string, index: number, now: Date): ServerDoc | null {
+    const doc = this.getDoc(docId);
+    const current = doc?.reminders[index];
+    if (!doc || !current) return null;
+    const next = completeReminder(current, now);
+    const reminders = doc.reminders.map((r, i) => (i === index ? next : r));
+    const res = this.updateDoc(docId, { baseRev: doc.rev, reminders });
+    return res?.doc ?? null;
   }
 
   /** Moves stale ephemerals out of the active stream: any ephemeral note not
