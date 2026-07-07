@@ -10,6 +10,7 @@ import {
   type ViewDef,
 } from '@forge/core';
 import { useEffect, useRef, useState } from 'react';
+import { NoteEditor } from './editor/NoteEditor';
 import { captureNote, flashNotice, removeDoc, saveDoc } from './store';
 
 export type MobileScreen = 'notes' | 'search' | 'capture';
@@ -273,11 +274,20 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
     importance: doc.importance,
   });
   const [busy, setBusy] = useState(false);
+  const [editorMode, setEditorMode] = useState<'rich' | 'raw'>(() =>
+    localStorage.getItem('forge-editor-mode') === 'raw' ? 'raw' : 'rich',
+  );
   const dirty =
     body !== saved.body ||
     axes.durability !== saved.durability ||
     axes.formality !== saved.formality ||
     axes.importance !== saved.importance;
+
+  const toggleMode = (): void => {
+    const next = editorMode === 'rich' ? 'raw' : 'rich';
+    setEditorMode(next);
+    localStorage.setItem('forge-editor-mode', next);
+  };
 
   const save = async (): Promise<void> => {
     if (!dirty || busy) return;
@@ -314,11 +324,14 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
       role="presentation"
     >
       <div className="editor" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <textarea autoFocus value={body} onChange={(e) => setBody(e.target.value)} />
+        <NoteEditor key={editorMode} value={body} onChange={setBody} mode={editorMode} autoFocus />
         <AxisPicker value={axes} onChange={setAxes} />
         <div className="editor-actions">
           <button type="button" className="ghost danger" onClick={() => void del()}>
             Delete
+          </button>
+          <button type="button" className="ghost" onClick={toggleMode}>
+            {editorMode === 'rich' ? 'raw' : 'rich'}
           </button>
           <span className="spacer" />
           <button type="button" onClick={maybeClose}>

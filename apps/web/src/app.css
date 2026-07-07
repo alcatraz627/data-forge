@@ -328,6 +328,94 @@ button.danger {
   min-height: 200px;
 }
 
+.rich-editor .ProseMirror {
+  min-height: 200px;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.rich-editor .ProseMirror:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.rich-editor .ProseMirror > :first-child {
+  margin-top: 0;
+}
+
+.rich-editor .ProseMirror h1 {
+  font-size: var(--text-xl);
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.rich-editor .ProseMirror h2,
+.rich-editor .ProseMirror h3 {
+  font-size: var(--text-lg);
+  margin: var(--space-3) 0 var(--space-1);
+}
+
+.rich-editor .ProseMirror p {
+  margin: var(--space-1) 0;
+}
+
+.rich-editor .ProseMirror ul,
+.rich-editor .ProseMirror ol {
+  padding-left: var(--space-5);
+  margin: var(--space-1) 0;
+}
+
+.rich-editor .ProseMirror code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+}
+
+.rich-editor .ProseMirror pre {
+  font-family: var(--font-mono);
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  overflow-x: auto;
+}
+
+.rich-editor .ProseMirror pre code {
+  background: none;
+  padding: 0;
+}
+
+.rich-editor .ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: var(--space-1);
+}
+
+.rich-editor .ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.rich-editor .ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+.rich-editor .ProseMirror ul[data-type="taskList"] input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+.rich-editor .ProseMirror blockquote {
+  border-left: 3px solid var(--border);
+  margin: var(--space-2) 0;
+  padding-left: var(--space-3);
+  color: var(--dim);
+}
+
 .editor-actions {
   display: flex;
   gap: var(--space-2);
