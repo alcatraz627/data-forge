@@ -211,6 +211,46 @@ describe('external edits', () => {
   });
 });
 
+describe('auto-archive sweep', () => {
+  // Rewrites a note's file with an older `updated`, reindexing both file and
+  // index so the doc is genuinely stale end-to-end (not just in the index).
+  const backdate = (fa: ForgeApp, id: string, iso: string): void => {
+    const rel = docRelPath(id);
+    const text = readFileSync(join(fa.forge.dataDir, rel), 'utf8').replace(
+      /^updated: .*$/m,
+      `updated: ${iso}`,
+    );
+    writeFileSync(join(fa.forge.dataDir, rel), text);
+    fa.forge.applyExternalFile(rel, text);
+  };
+
+  it('archives stale ephemerals but spares fresh, pinned, reminded, and durable notes', async () => {
+    const fa = await makeApp();
+    const stale = await create(fa, 'old scratch');
+    const pinned = await create(fa, 'old but pinned', { pinned: true });
+    const reminded = await create(fa, 'old with reminder', {
+      reminders: [{ at: '2026-08-01T09:00:00+05:30', status: 'active' }],
+    });
+    const durable = await create(fa, 'kept reference', { durability: 'durable' });
+    const fresh = await create(fa, 'just now');
+
+    const old = '2026-05-01T09:00:00+05:30';
+    for (const id of [stale.id, pinned.id, reminded.id, durable.id]) backdate(fa, id, old);
+
+    const n = fa.forge.archiveStale(30 * 86_400_000, Date.parse('2026-07-07T09:00:00+05:30'));
+    expect(n).toBe(1);
+    expect(fa.forge.getDoc(stale.id)?.archived).toBe(true);
+    expect(fa.forge.getDoc(pinned.id)?.archived).toBe(false);
+    expect(fa.forge.getDoc(reminded.id)?.archived).toBe(false);
+    expect(fa.forge.getDoc(durable.id)?.archived).toBe(false);
+    expect(fa.forge.getDoc(fresh.id)?.archived).toBe(false);
+
+    // Archiving preserves updated (it isn't a user edit) and is idempotent.
+    expect(fa.forge.getDoc(stale.id)?.updated).toBe(old);
+    expect(fa.forge.archiveStale(30 * 86_400_000, Date.parse('2026-07-07T09:00:00+05:30'))).toBe(0);
+  });
+});
+
 describe('git batching', () => {
   it('commits accepted writes and leaves the repo clean', async () => {
     const fa = await makeApp();

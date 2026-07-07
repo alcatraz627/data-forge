@@ -36,6 +36,9 @@ export interface DocMeta {
   formality: Formality;
   importance: Importance;
   pinned: boolean;
+  /** Out of the active stream but not deleted. Stale ephemerals archive
+   * automatically so the inbox self-cleans; can also be toggled by hand. */
+  archived: boolean;
   reminders: Reminder[];
   /** Capture origin, e.g. web | menubar | android-widget | api:<agent> | import:keep. */
   source: string;

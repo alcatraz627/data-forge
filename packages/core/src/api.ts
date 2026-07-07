@@ -47,6 +47,7 @@ export interface CreateDocBody {
   formality?: Formality;
   importance?: Importance;
   pinned?: boolean;
+  archived?: boolean;
   reminders?: Reminder[];
   source: string;
 }
@@ -59,6 +60,7 @@ export interface UpdateDocBody {
   formality?: Formality;
   importance?: Importance;
   pinned?: boolean;
+  archived?: boolean;
   reminders?: Reminder[];
 }
 

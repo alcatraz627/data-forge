@@ -53,6 +53,7 @@ function axisErrors(f: Record<string, unknown>): string | null {
   if (f.formality !== undefined && !oneOf(f.formality, FORMALITY)) return 'bad formality';
   if (f.importance !== undefined && !oneOf(f.importance, IMPORTANCE)) return 'bad importance';
   if (f.pinned !== undefined && typeof f.pinned !== 'boolean') return 'bad pinned';
+  if (f.archived !== undefined && typeof f.archived !== 'boolean') return 'bad archived';
   return null;
 }
 
@@ -77,6 +78,7 @@ function parseCreate(raw: unknown): Validated<CreateDocBody> {
       ...(f.formality !== undefined ? { formality: f.formality as never } : {}),
       ...(f.importance !== undefined ? { importance: f.importance as never } : {}),
       ...(f.pinned !== undefined ? { pinned: f.pinned as boolean } : {}),
+      ...(f.archived !== undefined ? { archived: f.archived as boolean } : {}),
       ...(f.reminders !== undefined ? { reminders } : {}),
     },
   };
@@ -99,6 +101,7 @@ function parseUpdate(raw: unknown): Validated<UpdateDocBody> {
   if (f.formality !== undefined) out.formality = f.formality as never;
   if (f.importance !== undefined) out.importance = f.importance as never;
   if (f.pinned !== undefined) out.pinned = f.pinned as boolean;
+  if (f.archived !== undefined) out.archived = f.archived as boolean;
   if (f.reminders !== undefined) out.reminders = reminders;
   if (Object.keys(out).length === 1) return { error: 'no fields to update' };
   return { ok: out };
@@ -115,6 +118,7 @@ async function jsonBody(req: Request): Promise<unknown> {
 export async function createForgeApp(opts: {
   dataDir: string;
   gitQuietMs?: number;
+  archiveDays?: number;
 }): Promise<ForgeApp> {
   await ensureDataDir(opts.dataDir);
   const forge = new Forge(opts.dataDir, opts);
@@ -123,6 +127,10 @@ export async function createForgeApp(opts: {
     console.log(
       `reconcile: ${counts.files} files, ${counts.changed} changed, ${counts.removed} removed`,
     );
+  }
+  if (opts.archiveDays !== undefined) {
+    const n = forge.archiveStale(opts.archiveDays * 86_400_000, Date.now());
+    if (n > 0) console.log(`archive: swept ${n} stale ephemeral note(s)`);
   }
 
   const app = new Hono();

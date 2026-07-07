@@ -48,6 +48,7 @@ const serverDoc = (id: string, rev: number, body: string): ServerDoc => ({
   formality: 'scratch',
   importance: 'normal',
   pinned: false,
+  archived: false,
   reminders: [],
   source: 'test',
   body,

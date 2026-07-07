@@ -27,6 +27,7 @@ export function openDb(path: string): Db {
       formality TEXT NOT NULL,
       importance TEXT NOT NULL,
       pinned INTEGER NOT NULL DEFAULT 0,
+      archived INTEGER NOT NULL DEFAULT 0,
       source TEXT NOT NULL DEFAULT '',
       reminders TEXT NOT NULL DEFAULT '[]',
       hash TEXT NOT NULL DEFAULT ''
@@ -43,7 +44,28 @@ export function openDb(path: string): Db {
     CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     INSERT OR IGNORE INTO kv (key, value) VALUES ('seq', '0');
   `);
+  migrateColumns(db);
   return db;
+}
+
+/** Additive column migration for an index created by an older build. The
+ * index is derived and rebuildable (ADR-0001), but rebuilding would reset the
+ * change-feed seq and force every client to re-pull; adding the missing column
+ * in place preserves the seq and all merge bases. Each entry is (column,
+ * full definition); a column already present is skipped. */
+const EXPECTED_COLUMNS: Array<[string, string]> = [
+  ['archived', 'archived INTEGER NOT NULL DEFAULT 0'],
+];
+
+function migrateColumns(db: Db): void {
+  const have = new Set(
+    (db.prepare('PRAGMA table_info(docs)').all() as unknown as Array<{ name: string }>).map(
+      (r) => r.name,
+    ),
+  );
+  for (const [name, def] of EXPECTED_COLUMNS) {
+    if (!have.has(name)) db.exec(`ALTER TABLE docs ADD COLUMN ${def}`);
+  }
 }
 
 /** Runs fn atomically; node:sqlite has no transaction helper of its own. */

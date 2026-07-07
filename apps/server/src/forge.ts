@@ -40,6 +40,7 @@ interface DocRow {
   formality: string;
   importance: string;
   pinned: number;
+  archived: number;
   source: string;
   reminders: string;
   hash: string;
@@ -99,6 +100,7 @@ export class Forge {
       formality: row.formality as Doc['formality'],
       importance: row.importance as Doc['importance'],
       pinned: row.pinned === 1,
+      archived: row.archived === 1,
       reminders: JSON.parse(row.reminders),
       source: row.source,
       body,
@@ -118,13 +120,13 @@ export class Forge {
       this.db
         .prepare(
           `INSERT INTO docs (id, path, rev, seq, deleted, title, preview, created, updated,
-             durability, formality, importance, pinned, source, reminders, hash)
+             durability, formality, importance, pinned, archived, source, reminders, hash)
            VALUES (@id, @path, @rev, @seq, 0, @title, @preview, @created, @updated,
-             @durability, @formality, @importance, @pinned, @source, @reminders, @hash)
+             @durability, @formality, @importance, @pinned, @archived, @source, @reminders, @hash)
            ON CONFLICT(id) DO UPDATE SET path=@path, rev=@rev, seq=@seq, deleted=0,
              title=@title, preview=@preview, created=@created, updated=@updated,
              durability=@durability, formality=@formality, importance=@importance,
-             pinned=@pinned, source=@source, reminders=@reminders, hash=@hash`,
+             pinned=@pinned, archived=@archived, source=@source, reminders=@reminders, hash=@hash`,
         )
         .run({
           id: doc.id,
@@ -139,6 +141,7 @@ export class Forge {
           formality: doc.formality,
           importance: doc.importance,
           pinned: doc.pinned ? 1 : 0,
+          archived: doc.archived ? 1 : 0,
           source: doc.source,
           reminders: JSON.stringify(doc.reminders),
           hash: sha256(fileText),
@@ -199,6 +202,7 @@ export class Forge {
       formality: input.formality ?? CAPTURE_DEFAULTS.formality,
       importance: input.importance ?? CAPTURE_DEFAULTS.importance,
       pinned: input.pinned ?? false,
+      archived: input.archived ?? false,
       reminders: input.reminders ?? [],
       source: input.source,
       body: input.body,
@@ -228,6 +232,7 @@ export class Forge {
     if (input.formality !== undefined) fields.formality = input.formality;
     if (input.importance !== undefined) fields.importance = input.importance;
     if (input.pinned !== undefined) fields.pinned = input.pinned;
+    if (input.archived !== undefined) fields.archived = input.archived;
     if (input.reminders !== undefined) fields.reminders = input.reminders;
 
     const finish = (doc: Doc, merged: boolean, conflictDocId?: string): UpdateDocResponse => {
@@ -408,6 +413,33 @@ export class Forge {
       }
     }
     return { files, changed, removed };
+  }
+
+  /** Moves stale ephemerals out of the active stream: any ephemeral note not
+   * touched in `maxAgeMs` is archived (never deleted), so the inbox
+   * self-cleans while capture stays consequence-free. Pinned notes and notes
+   * carrying a reminder are exempt — those are deliberate keeps. Runs on boot
+   * and on a timer; each archive is a normal write, so it syncs to clients. */
+  archiveStale(maxAgeMs: number, nowMs: number): number {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM docs
+         WHERE deleted = 0 AND archived = 0 AND durability = 'ephemeral' AND pinned = 0`,
+      )
+      .all() as unknown as DocRow[];
+    let archived = 0;
+    for (const row of rows) {
+      if (row.reminders !== '[]') continue;
+      const updatedMs = new Date(row.updated).getTime();
+      if (Number.isNaN(updatedMs) || nowMs - updatedMs < maxAgeMs) continue;
+      const head = this.headDoc(row);
+      const doc: Doc = { ...head, archived: true };
+      const text = this.persist(doc, row.path);
+      const { seq } = this.indexDoc(doc, row.path, text);
+      this.afterWrite(seq);
+      archived += 1;
+    }
+    return archived;
   }
 
   flush(): Promise<void> {

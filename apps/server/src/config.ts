@@ -10,4 +10,9 @@ export const config = {
   port: Number(process.env.FORGE_PORT ?? 5040),
   dataDir: resolve(process.env.FORGE_DATA ?? resolve(homedir(), 'DataForge')),
   webDist: resolve(process.env.FORGE_WEB_DIST ?? resolve(here, '../../web/dist')),
+  /** Untouched ephemeral notes older than this auto-archive. */
+  archiveDays: Number(process.env.FORGE_ARCHIVE_DAYS ?? 30),
 };
+
+export const DAY_MS = 86_400_000;
+export const ARCHIVE_SWEEP_INTERVAL_MS = 60 * 60 * 1000;

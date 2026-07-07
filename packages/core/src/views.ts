@@ -13,6 +13,9 @@ export interface ViewFilter {
   importance?: readonly Importance[];
   sourcePrefix?: string;
   pinnedOnly?: boolean;
+  /** When true, the view shows ONLY archived docs; otherwise archived docs
+   * are excluded. Archiving takes a note out of every active view at once. */
+  archived?: boolean;
 }
 
 export interface ViewDef {
@@ -31,14 +34,19 @@ export const DEFAULT_VIEWS: readonly ViewDef[] = [
   { id: 'scratch', name: 'Scratchpad', filter: { durability: ['ephemeral'] } },
   { id: 'reference', name: 'Reference', filter: { durability: ['durable', 'permanent'] } },
   { id: 'conflicts', name: 'Conflicts', filter: { sourcePrefix: 'conflict:' } },
+  { id: 'archive', name: 'Archive', filter: { archived: true } },
 ];
 
-type ViewableDoc = Pick<Doc, 'durability' | 'formality' | 'importance' | 'source' | 'pinned'>;
+type ViewableDoc = Pick<
+  Doc,
+  'durability' | 'formality' | 'importance' | 'source' | 'pinned' | 'archived'
+>;
 
 /** Conflict copies only surface in All and in the Conflicts view itself;
- * they would be noise inside topical views. */
+ * archived docs surface only in Archive. Both would be noise elsewhere. */
 export function matchesView(doc: ViewableDoc, view: ViewDef): boolean {
   const f = view.filter;
+  if ((f.archived ?? false) !== doc.archived) return false;
   if (f.sourcePrefix !== undefined) {
     if (!doc.source.startsWith(f.sourcePrefix)) return false;
   } else if (view.id !== 'all' && doc.source.startsWith('conflict:')) {

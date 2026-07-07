@@ -13,6 +13,7 @@ const doc = (over: Partial<Parameters<typeof matchesView>[0]> = {}) => ({
   importance: 'normal' as const,
   source: 'web',
   pinned: false,
+  archived: false,
   ...over,
 });
 
@@ -42,5 +43,13 @@ describe('default views', () => {
     expect(matchesView(conflict, view('conflicts'))).toBe(true);
     expect(matchesView(conflict, view('scratch'))).toBe(false);
     expect(matchesView(doc(), view('conflicts'))).toBe(false);
+  });
+
+  it('archived docs appear only in Archive; active views exclude them', () => {
+    const archived = doc({ archived: true, durability: 'ephemeral' });
+    expect(matchesView(archived, view('archive'))).toBe(true);
+    expect(matchesView(archived, view('all'))).toBe(false);
+    expect(matchesView(archived, view('scratch'))).toBe(false);
+    expect(matchesView(doc(), view('archive'))).toBe(false);
   });
 });

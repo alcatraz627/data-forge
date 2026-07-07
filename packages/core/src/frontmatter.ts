@@ -29,6 +29,7 @@ export function serializeDoc(doc: Doc): string {
     `formality: ${doc.formality}`,
     `importance: ${doc.importance}`,
     `pinned: ${doc.pinned}`,
+    ...(doc.archived ? ['archived: true'] : []),
     `source: ${doc.source}`,
   ];
   if (doc.reminders.length > 0) {
@@ -108,6 +109,7 @@ export function parseDoc(text: string): ParsedDoc | null {
     formality: pick(f.formality, FORMALITY, CAPTURE_DEFAULTS.formality),
     importance: pick(f.importance, IMPORTANCE, CAPTURE_DEFAULTS.importance),
     pinned: f.pinned === true,
+    archived: f.archived === true,
     reminders: parseReminders(f.reminders),
     source: str(f.source, 'external'),
     body,
@@ -125,6 +127,7 @@ export function docFromExternal(text: string, id: string, now: string): Doc {
     updated: now,
     ...CAPTURE_DEFAULTS,
     pinned: false,
+    archived: false,
     reminders: [],
     source: 'external',
     body: text.endsWith('\n') ? text.slice(0, -1) : text,

@@ -5,13 +5,22 @@
  */
 import { serve } from '@hono/node-server';
 import { createForgeApp } from './app.js';
-import { config } from './config.js';
+import { ARCHIVE_SWEEP_INTERVAL_MS, DAY_MS, config } from './config.js';
 import { addStaticRoutes } from './static.js';
 import { startWatcher } from './watcher.js';
 
-const { app, forge } = await createForgeApp({ dataDir: config.dataDir });
+const { app, forge } = await createForgeApp({
+  dataDir: config.dataDir,
+  archiveDays: config.archiveDays,
+});
 const watcher = startWatcher(forge);
 addStaticRoutes(app, config.webDist);
+
+const archiveTimer = setInterval(() => {
+  const n = forge.archiveStale(config.archiveDays * DAY_MS, Date.now());
+  if (n > 0) console.log(`archive: swept ${n} stale ephemeral note(s)`);
+}, ARCHIVE_SWEEP_INTERVAL_MS);
+archiveTimer.unref();
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`forge-server listening on :${info.port} (data: ${config.dataDir})`);

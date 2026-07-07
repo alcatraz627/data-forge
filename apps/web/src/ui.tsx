@@ -26,6 +26,9 @@ export function useIsMobile(): boolean {
   return mobile;
 }
 
+/** Views that clutter the chip row until they hold something. */
+const EMPTY_HIDDEN = new Set(['conflicts', 'archive']);
+
 export function ViewChips({
   views,
   active,
@@ -40,7 +43,7 @@ export function ViewChips({
   return (
     <div className="view-chips">
       {views
-        .filter((v) => v.id !== 'conflicts' || (counts[v.id] ?? 0) > 0)
+        .filter((v) => !EMPTY_HIDDEN.has(v.id) || (counts[v.id] ?? 0) > 0)
         .map((v) => (
           <button
             key={v.id}
@@ -313,6 +316,13 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
     onClose();
   };
 
+  // Archive is a discrete state change, not a tracked edit: it applies and
+  // closes rather than waiting for Save.
+  const toggleArchive = async (): Promise<void> => {
+    await saveDoc(doc.id, baseRev, { archived: !doc.archived });
+    onClose();
+  };
+
   return (
     <div
       className="editor-backdrop"
@@ -332,6 +342,9 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
           </button>
           <button type="button" className="ghost" onClick={toggleMode}>
             {editorMode === 'rich' ? 'raw' : 'rich'}
+          </button>
+          <button type="button" className="ghost" onClick={() => void toggleArchive()}>
+            {doc.archived ? 'unarchive' : 'archive'}
           </button>
           <span className="spacer" />
           <button type="button" onClick={maybeClose}>

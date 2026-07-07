@@ -182,6 +182,7 @@ export async function captureNote(input: Omit<CreateDocBody, 'source' | 'id'>): 
     formality: input.formality ?? CAPTURE_DEFAULTS.formality,
     importance: input.importance ?? CAPTURE_DEFAULTS.importance,
     pinned: input.pinned ?? false,
+    archived: false,
     reminders: input.reminders ?? [],
     source: 'web',
     body: input.body,
