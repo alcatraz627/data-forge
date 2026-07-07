@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 
 pnpm --filter @forge/tokens build
 pnpm -r typecheck
+pnpm -r test
 
 # Boot the server against a throwaway data dir. This exercises the git
 # bootstrap path end-to-end without touching real data in ~/DataForge.

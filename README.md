@@ -18,6 +18,21 @@ make verify     # typecheck + boot check + build
 
 The server stores data in `~/DataForge` (override with `FORGE_DATA`).
 
+## Deploy (Mac: launchd + tailscale)
+
+One-time install (user-run; installs a persistent service):
+
+```bash
+cp -f scripts/com.alcatraz.forge-server.plist ~/Library/LaunchAgents/
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.alcatraz.forge-server.plist
+# with Tailscale running, expose it with a real HTTPS cert:
+/Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg 5040
+```
+
+After code changes: `make deploy` (rebuilds web, restarts the service).
+Logs: `make logs`. The service serves API + web app on :5040 and stores
+data in `~/DataForge` (its own git repo).
+
 ## Layout
 
 | Path | What |
