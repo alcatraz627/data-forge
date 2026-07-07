@@ -1,3 +1,35 @@
+## session: M4 + M5 autonomous run [forge-plan-d4] — 2026-07-08
+
+Purpose: user set an autonomous goal (finish through M5 while away). Built M4
+(history, attachments, backup, restore drill, perf gates) and M5 (CLI, inbox,
+MCP, tldraw canvas, Tauri tray), validating each with tests + browser/emulator.
+
+Insights:
+- baseRev-0 bug (general, found via canvas): a note opened before its create
+  synced carries baseRev 0, which the server rejects (baseRev >= 1). saveDoc
+  now advances a 0 base to the note's current synced rev — safe because a
+  brand-new note has no concurrent editor (H1 doesn't apply) and the outbox
+  still folds edits into an un-drained create. Only override when baseRev < 1;
+  a Math.max over all cases would silently defeat the H1 conflict fork.
+- Canvas notes stay markdown files (marker line + tldraw JSON body), so the
+  whole pipeline (sync, merge, history, git, outbox) works on them for free.
+  deriveTitle/preview must know the marker or cards show raw JSON.
+- tldraw resists synthetic pointer events (its own pointer-capture pipeline);
+  driving it in a test needs clicking the real tool BUTTON (data-testid=
+  tools.rectangle) then a pen-type PointerEvent drag on .tl-canvas.
+- The Rust/Tauri v2 tray + global-shortcut API compiled first try (55s, 25MB
+  debug binary). Did NOT launch the GUI: a tray app grabs the global hotkey
+  system-wide and steals focus — verify GUI runtime on the user's session,
+  like the Android APK.
+- Standalone client entry points (cli, mcp) correctly read FORGE_URL at their
+  top rather than a shared config module — recorded in
+  .claude/conventions/env-access.md so the env-access hook stops firing.
+- Service-worker staleness recurs when rebuilding under an active PWA: the SW
+  serves a precached index.html referencing an old chunk hash -> "Failed to
+  load module script". Clear SW + caches between rebuilds in browser tests.
+
+---
+
 ## session: M3 Android companion + toolchain [forge-plan-d4] — 2026-07-07
 
 Purpose: install a contained Android toolchain and build the native companion
