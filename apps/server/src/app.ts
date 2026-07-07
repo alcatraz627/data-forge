@@ -145,6 +145,7 @@ export async function createForgeApp(opts: {
   dataDir: string;
   gitQuietMs?: number;
   archiveDays?: number;
+  inboxToken?: string;
 }): Promise<ForgeApp> {
   await ensureDataDir(opts.dataDir);
   const forge = new Forge(opts.dataDir, opts);
@@ -204,6 +205,22 @@ export async function createForgeApp(opts: {
     const result = forge.createDoc(parsed.ok);
     if ('error' in result) return c.json({ error: result.error }, 409);
     return c.json(result.ok, 201);
+  });
+
+  // Automation drop-box: a one-field POST for cron jobs, agents, shortcuts.
+  // Gated by a bearer token only if one is configured (tailnet-trust default).
+  app.post('/api/inbox', async (c) => {
+    if (opts.inboxToken && c.req.header('authorization') !== `Bearer ${opts.inboxToken}`) {
+      return c.json({ error: 'unauthorized' }, 401);
+    }
+    const raw = await jsonBody(c.req.raw);
+    const f = (typeof raw === 'object' && raw ? raw : {}) as Record<string, unknown>;
+    const text = typeof f.text === 'string' ? f.text : typeof f.body === 'string' ? f.body : '';
+    if (!text.trim()) return c.json({ error: 'text required' }, 400);
+    const source =
+      typeof f.source === 'string' && SOURCE_RE.test(f.source) ? f.source : 'api:inbox';
+    const result = forge.createDoc({ body: text, source });
+    return 'error' in result ? c.json({ error: result.error }, 409) : c.json(result.ok, 201);
   });
 
   app.put('/api/docs/:id', async (c) => {

@@ -251,6 +251,41 @@ describe('auto-archive sweep', () => {
   });
 });
 
+describe('inbox webhook', () => {
+  it('creates a note from a one-field POST', async () => {
+    const fa = await makeApp();
+    const res = await fa.app.request('/api/inbox', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ text: 'from an automation' }),
+    });
+    expect(res.status).toBe(201);
+    const doc = (await res.json()) as ServerDoc;
+    expect(doc.body).toBe('from an automation');
+    expect(doc.source).toBe('api:inbox');
+    expect(
+      (await fa.app.request('/api/inbox', { method: 'POST', headers: HEADERS, body: '{}' })).status,
+    ).toBe(400);
+  });
+
+  it('enforces a bearer token when one is configured', async () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'forge-inbox-')), 'data');
+    const fa = await createForgeApp({ dataDir: dir, gitQuietMs: 600_000, inboxToken: 'secret' });
+    const noAuth = await fa.app.request('/api/inbox', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ text: 'x' }),
+    });
+    expect(noAuth.status).toBe(401);
+    const withAuth = await fa.app.request('/api/inbox', {
+      method: 'POST',
+      headers: { ...HEADERS, authorization: 'Bearer secret' },
+      body: JSON.stringify({ text: 'x' }),
+    });
+    expect(withAuth.status).toBe(201);
+  });
+});
+
 describe('attachments', () => {
   it('stores content-addressed, serves back the exact bytes, and dedupes', async () => {
     const fa = await makeApp();

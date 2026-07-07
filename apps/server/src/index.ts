@@ -13,6 +13,7 @@ import { startWatcher } from './watcher.js';
 const { app, forge } = await createForgeApp({
   dataDir: config.dataDir,
   archiveDays: config.archiveDays,
+  inboxToken: config.inboxToken,
 });
 const watcher = startWatcher(forge);
 addStaticRoutes(app, config.webDist);

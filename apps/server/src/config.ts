@@ -14,6 +14,8 @@ export const config = {
   archiveDays: Number(process.env.FORGE_ARCHIVE_DAYS ?? 30),
   /** Backup remote to push the data repo to; empty disables off-site backup. */
   pushRemote: process.env.FORGE_PUSH_REMOTE ?? 'origin',
+  /** Optional bearer token gating the inbox webhook; empty means tailnet-trust. */
+  inboxToken: process.env.FORGE_INBOX_TOKEN ?? '',
 };
 
 export const DAY_MS = 86_400_000;
