@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import {
   type AgendaEntry,
@@ -504,6 +505,31 @@ export class Forge {
     } catch {
       return null;
     }
+  }
+
+  /** Stores a binary attachment content-addressed by its sha256, so identical
+   * uploads dedupe to one file and the name can never collide. Returns the
+   * on-disk filename (`<hash>.<ext>`); the note body references it by URL.
+   * Attachments live in the git repo alongside notes but outside the change
+   * feed — they're immutable blobs, not synced docs. */
+  putAttachment(bytes: Buffer, ext: string): string {
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const safeExt = /^[a-z0-9]{1,8}$/i.test(ext) ? ext.toLowerCase() : 'bin';
+    const name = `${hash}.${safeExt}`;
+    const abs = this.abs(join('attachments', name));
+    this.selfWrites.mark(abs);
+    mkdirSync(this.abs('attachments'), { recursive: true });
+    if (!existsSync(abs)) writeFileSync(abs, bytes);
+    this.batcher.markDirty();
+    return name;
+  }
+
+  /** Resolves an attachment filename to its path, refusing anything that isn't
+   * a bare `<hex>.<ext>` (no traversal). */
+  attachmentPath(name: string): string | null {
+    if (!/^[0-9a-f]{64}\.[a-z0-9]{1,8}$/i.test(name)) return null;
+    const abs = this.abs(join('attachments', name));
+    return existsSync(abs) ? abs : null;
   }
 
   flush(): Promise<void> {

@@ -251,6 +251,45 @@ describe('auto-archive sweep', () => {
   });
 });
 
+describe('attachments', () => {
+  it('stores content-addressed, serves back the exact bytes, and dedupes', async () => {
+    const fa = await makeApp();
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4, 5]);
+
+    const up = await fa.app.request('/api/attachments?ext=png', {
+      method: 'POST',
+      headers: { 'content-type': 'image/png' },
+      body: bytes,
+    });
+    expect(up.status).toBe(201);
+    const { name, url } = (await up.json()) as { name: string; url: string };
+    expect(name).toMatch(/^[0-9a-f]{64}\.png$/);
+
+    const got = await fa.app.request(url);
+    expect(got.status).toBe(200);
+    expect(got.headers.get('content-type')).toBe('image/png');
+    expect(new Uint8Array(await got.arrayBuffer())).toEqual(bytes);
+
+    // Same bytes -> same hash -> same name (dedup).
+    const again = await fa.app.request('/api/attachments?ext=png', {
+      method: 'POST',
+      headers: { 'content-type': 'image/png' },
+      body: bytes,
+    });
+    expect(((await again.json()) as { name: string }).name).toBe(name);
+  });
+
+  it('rejects empty uploads and path-traversal names', async () => {
+    const fa = await makeApp();
+    const empty = await fa.app.request('/api/attachments', {
+      method: 'POST',
+      body: new Uint8Array(),
+    });
+    expect(empty.status).toBe(400);
+    expect((await fa.app.request('/api/attachments/..%2f..%2fetc%2fpasswd')).status).toBe(404);
+  });
+});
+
 describe('per-note history', () => {
   it('lists commits for a note and reads its body at an old revision', async () => {
     const fa = await makeApp();

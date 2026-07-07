@@ -53,6 +53,18 @@ export const history = (id: string): Promise<{ history: HistoryEntry[] }> =>
 export const revisionAt = (id: string, commit: string): Promise<{ body: string }> =>
   req(`/api/docs/${id}/history/${commit}`);
 
+/** Uploads an image/file and returns its stable content-addressed URL. */
+export async function uploadAttachment(file: File | Blob): Promise<string> {
+  const ext = file instanceof File ? file.name.split('.').pop() : undefined;
+  const res = await fetch(`/api/attachments${ext ? `?ext=${encodeURIComponent(ext)}` : ''}`, {
+    method: 'POST',
+    headers: { 'content-type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+  if (!res.ok) throw new ApiError(res.status, 'upload failed');
+  return ((await res.json()) as { url: string }).url;
+}
+
 export const transport: SyncTransport = {
   changes: (since: number): Promise<ChangesResponse> => req(`/api/changes?since=${since}`),
 };

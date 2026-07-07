@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { extname } from 'node:path';
 import {
   type CreateDocBody,
   DURABILITY,
@@ -22,7 +24,24 @@ export interface ForgeApp {
 }
 
 const MAX_BODY = 1_000_000;
+const MAX_ATTACHMENT = 15_000_000;
 const SOURCE_RE = /^[\w.:@-]{1,64}$/;
+
+const ATTACHMENT_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  pdf: 'application/pdf',
+};
+
+const extFromType = (type: string | undefined): string => {
+  const t = (type ?? '').split(';')[0]?.trim();
+  const found = Object.entries(ATTACHMENT_TYPES).find(([, v]) => v === t);
+  return found?.[0] ?? 'bin';
+};
 
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[]): v is T =>
   typeof v === 'string' && (allowed as readonly string[]).includes(v);
@@ -197,6 +216,29 @@ export async function createForgeApp(opts: {
   app.delete('/api/docs/:id', (c) =>
     forge.deleteDoc(c.req.param('id')) ? c.json({ ok: true }) : c.json({ error: 'not found' }, 404),
   );
+
+  app.post('/api/attachments', async (c) => {
+    const buf = Buffer.from(await c.req.arrayBuffer());
+    if (buf.length === 0) return c.json({ error: 'empty' }, 400);
+    if (buf.length > MAX_ATTACHMENT) return c.json({ error: 'too large' }, 413);
+    const ext = (c.req.query('ext') ?? extFromType(c.req.header('content-type'))).replace(
+      /^\./,
+      '',
+    );
+    const name = forge.putAttachment(buf, ext);
+    return c.json({ name, url: `/api/attachments/${name}` }, 201);
+  });
+
+  app.get('/api/attachments/:name', (c) => {
+    const abs = forge.attachmentPath(c.req.param('name'));
+    if (!abs) return c.json({ error: 'not found' }, 404);
+    return new Response(new Uint8Array(readFileSync(abs)), {
+      headers: {
+        'content-type': ATTACHMENT_TYPES[extname(abs).slice(1)] ?? 'application/octet-stream',
+        'cache-control': 'public, max-age=31536000, immutable',
+      },
+    });
+  });
 
   app.get('/api/events', (c) =>
     streamSSE(c, async (stream) => {

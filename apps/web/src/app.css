@@ -409,6 +409,16 @@ button.danger {
   accent-color: var(--accent);
 }
 
+.rich-editor .ProseMirror img {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  margin: var(--space-2) 0;
+}
+
+.rich-editor .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+}
+
 .rich-editor .ProseMirror blockquote {
   border-left: 3px solid var(--border);
   margin: var(--space-2) 0;
