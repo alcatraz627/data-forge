@@ -321,8 +321,8 @@ calendar promises.
 | M1 ✅ | Offline (Dexie + outbox + SW), axes + saved views, TipTap behind NoteEditor, Keep + Tasks importer, auto-archive | done | Stop using Keep; history migrated |
 | M2 ✅ | Reminders (model + agenda) + SwiftBar menu bar. Web-push deferred: native alarms (M3) are the real delivery. | done | Stop using Google Tasks (agenda + menu bar + native alarms) |
 | M3 ✅ | Companion APK: RemoteViews widgets, native micro-capture, exact alarms, notification actions, share target | done | Home-screen parity with Keep, faster; device-local reminders |
-| M4 | Conflict inbox, per-note history (git log), attachments/photos, backup + restore drill, perf pass | ~3 ev | Trust it with everything |
-| M5 | MCP server + forge CLI + inbox webhook, Tauri menu bar (⌥Space), tldraw canvas | as desired | Agents read/write notes; expansive canvases |
+| M4 ✅ | Conflict inbox, per-note history (git log), attachments/photos, backup + restore drill, perf pass | done | Trust it with everything |
+| M5 ✅ | MCP server + forge CLI + inbox webhook, Tauri menu bar (⌘⇧Space), tldraw canvas | done | Agents read/write notes; expansive canvases |
 
 Kill-condition mapping: "too long to usable" → M0 is one weekend, M1 is the
 Keep switchover. "Overindexes one capability" → milestones are horizontal
