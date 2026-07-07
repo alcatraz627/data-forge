@@ -24,18 +24,22 @@ fn toggle_window<R: Runtime>(app: &tauri::AppHandle<R>) {
 pub fn run() {
     let hotkey = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::Space);
 
+    // If the hotkey is already claimed (input-method switchers often take
+    // Cmd+Shift+Space), register nothing and keep running — the tray still
+    // toggles the window. Panicking here would take the whole app down (review L1).
+    let shortcut_plugin = match tauri_plugin_global_shortcut::Builder::new().with_shortcut(hotkey) {
+        Ok(b) => b
+            .with_handler(move |app, shortcut, event| {
+                if shortcut == &hotkey && event.state() == ShortcutState::Pressed {
+                    toggle_window(app);
+                }
+            })
+            .build(),
+        Err(_) => tauri_plugin_global_shortcut::Builder::new().build(),
+    };
+
     tauri::Builder::default()
-        .plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcut(hotkey)
-                .expect("register hotkey")
-                .with_handler(move |app, shortcut, event| {
-                    if shortcut == &hotkey && event.state() == ShortcutState::Pressed {
-                        toggle_window(app);
-                    }
-                })
-                .build(),
-        )
+        .plugin(shortcut_plugin)
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(ActivationPolicy::Accessory);

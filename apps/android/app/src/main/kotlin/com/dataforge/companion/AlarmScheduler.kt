@@ -13,6 +13,8 @@ import android.content.Intent
  */
 object AlarmScheduler {
 
+    private fun requestCode(docId: String, index: Int): Int = (docId + index).hashCode()
+
     private fun pending(ctx: Context, item: ForgeApi.AgendaItem): PendingIntent {
         val intent = Intent(ctx, AlarmReceiver::class.java).apply {
             action = AlarmReceiver.ACTION_FIRE
@@ -22,10 +24,22 @@ object AlarmScheduler {
         }
         return PendingIntent.getBroadcast(
             ctx,
-            (item.docId + item.reminderIndex).hashCode(),
+            requestCode(item.docId, item.reminderIndex),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+    }
+
+    /** Cancels an alarm by its (docId,index) key without needing the original
+     * intent extras — PendingIntent matching ignores extras. */
+    private fun cancelKey(ctx: Context, docId: String, index: Int) {
+        val pi = PendingIntent.getBroadcast(
+            ctx,
+            requestCode(docId, index),
+            Intent(ctx, AlarmReceiver::class.java).setAction(AlarmReceiver.ACTION_FIRE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        ctx.getSystemService(AlarmManager::class.java).cancel(pi)
     }
 
     /** Schedules a single exact alarm; used for snooze (a local +delay reschedule). */
@@ -38,15 +52,20 @@ object AlarmScheduler {
     fun rescheduleAll(ctx: Context, items: List<ForgeApi.AgendaItem>) {
         val mgr = ctx.getSystemService(AlarmManager::class.java)
         val now = System.currentTimeMillis()
+        val scheduled = HashSet<String>()
         for (item in items) {
             val at = parseIso(item.at) ?: continue
-            val pi = pending(ctx, item)
-            if (at <= now) {
-                mgr.cancel(pi)
-                continue
-            }
-            mgr.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+            if (at <= now) continue
+            mgr.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending(ctx, item))
+            scheduled.add("${item.docId}:${item.reminderIndex}")
         }
+        // Cancel alarms that dropped out of the agenda entirely — a reminder
+        // deleted or completed elsewhere would otherwise still fire (review M1).
+        for (stale in Prefs.scheduledAlarmKeys(ctx) - scheduled) {
+            val i = stale.lastIndexOf(':')
+            if (i > 0) cancelKey(ctx, stale.substring(0, i), stale.substring(i + 1).toIntOrNull() ?: continue)
+        }
+        Prefs.setScheduledAlarmKeys(ctx, scheduled)
     }
 
     /** Parses an ISO-8601 instant (with offset or Z) to epoch millis. */

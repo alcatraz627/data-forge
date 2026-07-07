@@ -1,7 +1,10 @@
 package com.dataforge.companion
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Button
@@ -23,10 +26,24 @@ class CaptureActivity : Activity() {
 
     private val scope = CoroutineScope(Dispatchers.Main)
 
+    // Android 13+ makes POST_NOTIFICATIONS a runtime grant that defaults to
+    // denied; without it every reminder notification is silently dropped, so
+    // the headline reminders feature is invisible (review H2). Ask once on
+    // launch — the OS no-ops if already granted or permanently denied.
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_capture)
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        requestNotificationPermission()
 
         val input = findViewById<EditText>(R.id.capture_input)
         val shared = intent?.takeIf { it.action == Intent.ACTION_SEND }

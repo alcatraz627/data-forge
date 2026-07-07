@@ -407,6 +407,29 @@ describe('agenda + reminder endpoints', () => {
     });
     expect(missing.status).toBe(404);
   });
+
+  it('snoozes a reminder to a future time (Android snooze writeback)', async () => {
+    const fa = await makeApp();
+    const doc = await create(fa, 'snooze me', {
+      reminders: [{ at: '2026-07-01T09:00:00+05:30', status: 'active' }],
+    });
+    const until = '2026-07-20T04:30:00.000Z';
+    const res = await fa.app.request(
+      `/api/reminders/snooze?doc=${doc.id}&index=0&until=${encodeURIComponent(until)}`,
+      { method: 'POST' },
+    );
+    expect(res.status).toBe(200);
+    const updated = (await res.json()) as ServerDoc;
+    expect(updated.reminders[0]?.status).toBe('snoozed');
+    expect(new Date(updated.reminders[0]?.snoozedUntil ?? '').getTime()).toBe(
+      new Date(until).getTime(),
+    );
+    // The agenda now surfaces it at the snooze time (future), not the past `at`,
+    // so the Android reschedule keeps the alarm instead of cancelling it.
+    const agenda = await (await fa.app.request('/api/agenda')).json();
+    const entry = agenda.entries.find((e: { docId: string }) => e.docId === doc.id);
+    expect(new Date(entry.at).getTime()).toBe(new Date(until).getTime());
+  });
 });
 
 describe('git batching', () => {

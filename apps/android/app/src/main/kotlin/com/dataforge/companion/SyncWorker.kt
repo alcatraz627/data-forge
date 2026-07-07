@@ -28,10 +28,16 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
         if (url.isEmpty()) return@withContext Result.success()
         val api = ForgeApi(url)
         try {
+            // Re-queue on BOTH a rejected response and a thrown error (server
+            // unreachable throws IOException) — otherwise a captured note taken
+            // from the queue but not yet posted is lost forever (review H1).
             for (body in Prefs.takeOutbox(applicationContext)) {
-                if (!api.createNote(body)) {
-                    Prefs.addToOutbox(applicationContext, body)
+                val sent = try {
+                    api.createNote(body)
+                } catch (_: Exception) {
+                    false
                 }
+                if (!sent) Prefs.addToOutbox(applicationContext, body)
             }
             val agenda = api.agenda()
             Prefs.saveAgenda(applicationContext, ForgeApi.toJson(agenda))

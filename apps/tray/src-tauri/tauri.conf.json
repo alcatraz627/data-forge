@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' http://localhost:5040 https://*.ts.net; img-src 'self' http://localhost:5040 https://*.ts.net data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:5040 https://*.ts.net"
     }
   },
   "bundle": {

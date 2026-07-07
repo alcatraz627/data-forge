@@ -32,12 +32,16 @@ class AlarmReceiver : BroadcastReceiver() {
 
             ACTION_SNOOZE -> {
                 Notifications.cancel(ctx, intent.getIntExtra(EXTRA_NOTIF, 0))
-                // A snooze is a local reschedule +1h; the server keeps the
-                // reminder active, so the next sync leaves it in the agenda.
                 val title = intent.getStringExtra(EXTRA_TITLE) ?: "Reminder"
-                AlarmScheduler.scheduleOne(
-                    ctx, docId, index, title, System.currentTimeMillis() + 3_600_000L,
-                )
+                val until = System.currentTimeMillis() + 3_600_000L
+                // Set the local alarm immediately for responsiveness, AND write
+                // the snooze to the server — otherwise the next sync sees the
+                // reminder still active-in-the-past and cancels this very alarm
+                // (review M1). With the server snoozed, the agenda's fire time
+                // is the snooze target and the reschedule keeps it.
+                AlarmScheduler.scheduleOne(ctx, docId, index, title, until)
+                val untilIso = java.time.Instant.ofEpochMilli(until).toString()
+                runAsync(ctx) { url -> ForgeApi(url).snoozeReminder(docId, index, untilIso) }
             }
         }
     }

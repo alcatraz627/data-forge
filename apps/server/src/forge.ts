@@ -25,6 +25,7 @@ import {
   nowIso,
   parseDoc,
   serializeDoc,
+  snoozeReminder,
 } from '@forge/core';
 import { REV_KEEP, currentSeq, nextSeq, openDb, tx } from './db.js';
 import { Events } from './events.js';
@@ -451,6 +452,19 @@ export class Forge {
     const current = doc?.reminders[index];
     if (!doc || !current) return null;
     const next = completeReminder(current, now);
+    const reminders = doc.reminders.map((r, i) => (i === index ? next : r));
+    const res = this.updateDoc(docId, { baseRev: doc.rev, reminders });
+    return res?.doc ?? null;
+  }
+
+  /** Snoozes one reminder to a future time and persists it, so the reminder's
+   * effective fire time is the snooze target and every client (including the
+   * Android scheduler) reschedules to it instead of clobbering it (review M1). */
+  snoozeReminderAt(docId: string, index: number, until: Date): ServerDoc | null {
+    const doc = this.getDoc(docId);
+    const current = doc?.reminders[index];
+    if (!doc || !current) return null;
+    const next = snoozeReminder(current, until);
     const reminders = doc.reminders.map((r, i) => (i === index ? next : r));
     const res = this.updateDoc(docId, { baseRev: doc.rev, reminders });
     return res?.doc ?? null;

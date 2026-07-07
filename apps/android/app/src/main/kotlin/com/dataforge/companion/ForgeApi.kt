@@ -68,6 +68,12 @@ class ForgeApi(private val baseUrl: String) {
         return conn.responseCode in 200..299
     }
 
+    fun snoozeReminder(docId: String, index: Int, untilIso: String): Boolean {
+        val until = java.net.URLEncoder.encode(untilIso, "UTF-8")
+        val conn = open("/api/reminders/snooze?doc=$docId&index=$index&until=$until", "POST")
+        return conn.responseCode in 200..299
+    }
+
     companion object {
         /** Serializes agenda items to the JSON the widget snapshot stores. */
         fun toJson(items: List<AgendaItem>): String {

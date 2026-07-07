@@ -193,6 +193,16 @@ export async function createForgeApp(opts: {
     return doc ? c.json(doc) : c.json({ error: 'not found' }, 404);
   });
 
+  app.post('/api/reminders/snooze', (c) => {
+    const docId = c.req.query('doc') ?? '';
+    const index = Number(c.req.query('index'));
+    const until = new Date(c.req.query('until') ?? '');
+    if (!docId || !Number.isInteger(index) || index < 0 || Number.isNaN(until.getTime()))
+      return c.json({ error: 'bad params' }, 400);
+    const doc = forge.snoozeReminderAt(docId, index, until);
+    return doc ? c.json(doc) : c.json({ error: 'not found' }, 404);
+  });
+
   app.get('/api/docs/:id', (c) => {
     const doc = forge.getDoc(c.req.param('id'));
     return doc ? c.json(doc) : c.json({ error: 'not found' }, 404);
