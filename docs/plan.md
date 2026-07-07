@@ -319,8 +319,8 @@ calendar promises.
 |---|---|---|---|
 | M0 ✅ | Server store (CRUD + git commits + FTS + changes feed + SSE) + web capture/stream/search/edit + PWA + tailscale serve + launchd | done | Capture and search from both devices' browsers |
 | M1 ✅ | Offline (Dexie + outbox + SW), axes + saved views, TipTap behind NoteEditor, Keep + Tasks importer, auto-archive | done | Stop using Keep; history migrated |
-| M2 | Reminders (model + agenda + web push interim) + SwiftBar menu bar | 3-4 ev | Stop using Google Tasks (web-push fidelity) |
-| M3 | Companion APK: Glance widgets, micro-capture, exact alarms, notification actions, QS tile | 4-6 ev | Home-screen parity with Keep, faster; bulletproof reminders |
+| M2 ✅ | Reminders (model + agenda) + SwiftBar menu bar. Web-push deferred: native alarms (M3) are the real delivery. | done | Stop using Google Tasks (agenda + menu bar + native alarms) |
+| M3 ✅ | Companion APK: RemoteViews widgets, native micro-capture, exact alarms, notification actions, share target | done | Home-screen parity with Keep, faster; device-local reminders |
 | M4 | Conflict inbox, per-note history (git log), attachments/photos, backup + restore drill, perf pass | ~3 ev | Trust it with everything |
 | M5 | MCP server + forge CLI + inbox webhook, Tauri menu bar (⌥Space), tldraw canvas | as desired | Agents read/write notes; expansive canvases |
 

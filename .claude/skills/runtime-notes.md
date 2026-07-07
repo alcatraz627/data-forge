@@ -1,3 +1,31 @@
+## session: M3 Android companion + toolchain [forge-plan-d4] — 2026-07-07
+
+Purpose: install a contained Android toolchain and build the native companion
+APK (capture, exact alarms, RemoteViews widgets). "Stop using Tasks" delivery.
+
+Insights:
+- Contained Android toolchain, all Homebrew/removable: openjdk@17 (keg-only)
+  + android-commandlinetools cask (sdkmanager) + sdkmanager platform-34/
+  build-tools-34; Gradle via the project wrapper (8.11.1), never system-wide.
+  SDK scoped by apps/android/local.properties (gitignored), no shell-profile
+  edits. Removal documented in docs/android-toolchain.md.
+- Stack that builds: AGP 8.7.3 + Gradle 8.11.1 + Kotlin 2.0.21, compileSdk 34,
+  minSdk 26. RemoteViews widgets (not Glance) — lighter, dependency-free, no
+  Compose compiler, best fit for "don't slow the phone".
+- The emulator earned its cost: caught a cleartext-HTTP block (targetSdk 34
+  blocks http:// by default) that a compile never would. Symptom: capture
+  POST silently failed and fell to the offline outbox (correct fallback!).
+  Fix: usesCleartextTraffic=true. Then verified end-to-end: note typed in the
+  emulator reached the host server (10.0.2.2) as a file with source:android.
+- Verification ladder for a from-scratch native app: compile -> package (aapt
+  badging) -> launch-no-crash (logcat FATAL scan) -> render (screencap) ->
+  end-to-end (drive input, check the server). Each rung catches a different
+  class; "compiles" is the weakest.
+- adb run-as writes an app's shared_prefs on a debuggable build; transfer the
+  XML via base64 or quotes get stripped through adb shell -> run-as sh -c.
+
+---
+
 ## session: M2a reminders + agenda [forge-plan-d4] — 2026-07-07
 
 Purpose: reminder engine (rrule recurrence), agenda view, set/done/snooze UI.
