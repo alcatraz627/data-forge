@@ -41,9 +41,9 @@ async function main(): Promise<void> {
     case 'c': {
       const body = rest.join(' ').trim() || (await readStdin());
       if (!body) throw new Error('nothing to capture (pass text or pipe stdin)');
-      const doc = await api<{ id: string; title: string }>('/api/inbox', {
+      const doc = await api<{ id: string; title: string }>('/api/docs', {
         method: 'POST',
-        body: JSON.stringify({ text: body, source: 'api:cli' }),
+        body: JSON.stringify({ body, source: 'api:cli' }),
       });
       console.log(`captured ${doc.id}  ${doc.title}`);
       break;

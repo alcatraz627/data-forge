@@ -13,6 +13,7 @@ import {
   type ViewDef,
   buildAgenda,
   isCanvas,
+  nowIso,
 } from '@forge/core';
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import * as api from './api';
@@ -29,7 +30,9 @@ function isoToLocalInput(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const localInputToIso = (local: string): string => new Date(local).toISOString();
+// Keep the local offset (via nowIso), not toISOString's Z — reminders must
+// carry their zone so recurrence expands on local wall-clock (review H4).
+const localInputToIso = (local: string): string => nowIso(new Date(local));
 
 export function reminderLabel(at: string): string {
   const d = new Date(at);
@@ -484,7 +487,7 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
   // change elsewhere merge-forks instead of being overwritten. Kept for the
   // whole editing session: the outbox coalesces repeat saves, and a re-save
   // on top of our own acked edit merges cleanly (ours is a subset of theirs).
-  const [baseRev] = useState(doc.rev);
+  const [baseRev, setBaseRev] = useState(doc.rev);
   const [reminders, setReminders] = useState<Reminder[]>(doc.reminders);
   const [saved, setSaved] = useState({
     body: doc.body,
@@ -516,7 +519,8 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
     if (!dirty || busy) return;
     setBusy(true);
     try {
-      await saveDoc(doc.id, baseRev, { body, ...axes, reminders });
+      const newRev = await saveDoc(doc.id, baseRev, { body, ...axes, reminders });
+      setBaseRev(newRev);
       setSaved({ body, ...axes, reminders: JSON.stringify(reminders) });
     } catch (e) {
       flashNotice(e instanceof Error ? `Save failed: ${e.message}` : 'Save failed');

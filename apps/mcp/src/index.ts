@@ -43,9 +43,11 @@ server.tool(
   "Create a new note in Data Forge. It syncs to all the user's devices.",
   { body: z.string().describe('the note content, markdown allowed') },
   async ({ body }) => {
-    const doc = await api<{ id: string; title: string }>('/api/inbox', {
+    // Post to the ungated /api/docs, not the token-gated /api/inbox, so
+    // create_note keeps working when the inbox token is set (review L2).
+    const doc = await api<{ id: string; title: string }>('/api/docs', {
       method: 'POST',
-      body: JSON.stringify({ text: body, source: 'api:claude' }),
+      body: JSON.stringify({ body, source: 'api:claude' }),
     });
     return text(`Created note ${doc.id} — ${doc.title}`);
   },

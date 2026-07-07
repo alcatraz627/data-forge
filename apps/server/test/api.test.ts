@@ -135,14 +135,35 @@ describe('diverged edits', () => {
     expect(second.body.doc.body).toBe('hello from B');
     expect(second.body.conflictDocId).toBeDefined();
 
-    // The losing side survives whole: body AND metadata (reminders, pinned,
-    // axes) — not just the text.
+    // The losing side survives whole: body + axes + pinned. But NOT reminders —
+    // the surviving head keeps those, so the reminder never lives on two docs
+    // and can't fire twice (review M4).
     const conflict = fa.forge.getDoc(second.body.conflictDocId as string);
     expect(conflict?.body).toBe('hello from A');
     expect(conflict?.source).toBe(`conflict:${doc.id}`);
     expect(conflict?.importance).toBe('critical');
     expect(conflict?.pinned).toBe(true);
-    expect(conflict?.reminders).toEqual([reminder]);
+    expect(conflict?.reminders).toEqual([]);
+    // The head still carries the reminder.
+    expect(fa.forge.getDoc(doc.id)?.reminders).toEqual([reminder]);
+  });
+
+  it('accepts a canvas body larger than the 1MB prose cap', async () => {
+    const fa = await makeApp();
+    const big = `<!-- forge:canvas v1 -->\n{"blob":"${'x'.repeat(2_000_000)}"}`;
+    const res = await fa.app.request('/api/docs', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ body: big, source: 'test' }),
+    });
+    expect(res.status).toBe(201);
+    // A 2MB plain-text (non-canvas) body is still rejected.
+    const prose = await fa.app.request('/api/docs', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ body: 'x'.repeat(2_000_000), source: 'test' }),
+    });
+    expect(prose.status).toBe(400);
   });
 
   it('applies frontmatter-only stale updates without touching the newer body', async () => {

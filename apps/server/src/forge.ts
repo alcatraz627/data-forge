@@ -19,6 +19,7 @@ import {
   derivePreview,
   deriveTitle,
   docFromExternal,
+  isCanvas,
   isDocId,
   newId,
   nowIso,
@@ -152,9 +153,12 @@ export class Forge {
           hash: sha256(fileText),
         });
       this.db.prepare('DELETE FROM docs_fts WHERE id = ?').run(doc.id);
+      // A canvas body is a tldraw JSON blob; indexing it would pollute search
+      // with internal keys and bloat the FTS table (review L4). Index only the
+      // title for canvases.
       this.db
         .prepare('INSERT INTO docs_fts (id, title, body) VALUES (?, ?, ?)')
-        .run(doc.id, deriveTitle(doc.body), doc.body);
+        .run(doc.id, deriveTitle(doc.body), isCanvas(doc.body) ? '' : doc.body);
       this.db
         .prepare('INSERT OR REPLACE INTO doc_revs (id, rev, content) VALUES (?, ?, ?)')
         .run(doc.id, rev, fileText);
@@ -274,6 +278,9 @@ export class Forge {
     // The losing side is preserved whole — body AND metadata. Reminders,
     // pinned state, and axes ride along or "nothing is lost" would only be
     // true of the text (M0 review, finding M1).
+    // The surviving head keeps the reminders; the conflict copy must NOT carry
+    // them, or the same reminder lives on two docs and fires twice (review M4).
+    // Body + axes are preserved so the losing content is fully recoverable.
     const conflict = this.createDoc({
       body: head.body,
       source: `conflict:${id}`,
@@ -281,7 +288,6 @@ export class Forge {
       formality: head.formality,
       importance: head.importance,
       pinned: head.pinned,
-      reminders: head.reminders,
     });
     const conflictDocId = 'ok' in conflict ? conflict.ok.id : undefined;
     return finish({ ...head, ...fields, body: input.body, updated: now }, true, conflictDocId);

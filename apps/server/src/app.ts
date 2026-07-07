@@ -7,6 +7,7 @@ import {
   IMPORTANCE,
   type Reminder,
   type UpdateDocBody,
+  isCanvas,
   isDocId,
 } from '@forge/core';
 import { Hono } from 'hono';
@@ -24,8 +25,15 @@ export interface ForgeApp {
 }
 
 const MAX_BODY = 1_000_000;
+// Canvas bodies are machine JSON (a tldraw snapshot), not prose, and a complex
+// board crosses 1MB easily — dropping the edit would lose canvas work (review
+// M2). Give them a much higher ceiling.
+const MAX_CANVAS_BODY = 25_000_000;
 const MAX_ATTACHMENT = 15_000_000;
 const SOURCE_RE = /^[\w.:@-]{1,64}$/;
+
+const bodyTooLarge = (body: string): boolean =>
+  body.length > (isCanvas(body) ? MAX_CANVAS_BODY : MAX_BODY);
 
 const ATTACHMENT_TYPES: Record<string, string> = {
   png: 'image/png',
@@ -83,7 +91,7 @@ function parseCreate(raw: unknown): Validated<CreateDocBody> {
   if (typeof raw !== 'object' || raw === null) return { error: 'expected a JSON object' };
   const f = raw as Record<string, unknown>;
   if (typeof f.body !== 'string' || f.body.trim() === '') return { error: 'body required' };
-  if (f.body.length > MAX_BODY) return { error: 'body too large' };
+  if (bodyTooLarge(f.body)) return { error: 'body too large' };
   if (typeof f.source !== 'string' || !SOURCE_RE.test(f.source)) return { error: 'bad source' };
   if (f.id !== undefined && (typeof f.id !== 'string' || !isDocId(f.id)))
     return { error: 'bad id' };
@@ -116,7 +124,7 @@ function parseUpdate(raw: unknown): Validated<UpdateDocBody> {
   if (typeof f.baseRev !== 'number' || !Number.isInteger(f.baseRev) || f.baseRev < 1)
     return { error: 'baseRev required' };
   if (f.body !== undefined && typeof f.body !== 'string') return { error: 'bad body' };
-  if (typeof f.body === 'string' && f.body.length > MAX_BODY) return { error: 'body too large' };
+  if (typeof f.body === 'string' && bodyTooLarge(f.body)) return { error: 'body too large' };
   const axisErr = axisErrors(f);
   if (axisErr) return { error: axisErr };
   const reminders = f.reminders !== undefined ? validReminders(f.reminders) : [];
@@ -249,12 +257,16 @@ export async function createForgeApp(opts: {
   app.get('/api/attachments/:name', (c) => {
     const abs = forge.attachmentPath(c.req.param('name'));
     if (!abs) return c.json({ error: 'not found' }, 404);
-    return new Response(new Uint8Array(readFileSync(abs)), {
-      headers: {
-        'content-type': ATTACHMENT_TYPES[extname(abs).slice(1)] ?? 'application/octet-stream',
-        'cache-control': 'public, max-age=31536000, immutable',
-      },
-    });
+    const ext = extname(abs).slice(1);
+    const headers: Record<string, string> = {
+      'content-type': ATTACHMENT_TYPES[ext] ?? 'application/octet-stream',
+      'cache-control': 'public, max-age=31536000, immutable',
+    };
+    // An SVG served inline runs its embedded script in the server origin; a
+    // planted one (via an agent/inbox POST) would be stored XSS. Force download
+    // so it never executes in-page (review L3).
+    if (ext === 'svg') headers['content-disposition'] = 'attachment';
+    return new Response(new Uint8Array(readFileSync(abs)), { headers });
   });
 
   app.get('/api/events', (c) =>

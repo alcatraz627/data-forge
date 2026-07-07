@@ -236,11 +236,16 @@ export async function captureCanvas(): Promise<ServerDoc> {
   return doc;
 }
 
+/** Saves an edit and returns the note's rev once the write settles, so the
+ * editor can advance its base and a second save in the same session is a clean
+ * base==head write rather than a self-merge that forks a spurious conflict
+ * (M1-M5 review, H3). Returns the prior base when offline (the edit stays
+ * queued and coalesces). */
 export async function saveDoc(
   id: string,
   baseRev: number,
   patch: Omit<UpdateDocBody, 'baseRev'>,
-): Promise<void> {
+): Promise<number> {
   const known = byId.get(id);
   if (known) {
     const body = patch.body ?? known.body;
@@ -253,15 +258,17 @@ export async function saveDoc(
       updated: nowIso(),
     });
   }
-  // A note opened before its create synced has baseRev 0; the server requires
-  // baseRev >= 1. Once it has synced there's no concurrent editor, so advancing
-  // to its current rev is safe (the outbox still folds edits into a create
-  // that hasn't drained yet). Guards against editing a just-made canvas/note.
-  const effectiveBase = baseRev >= 1 ? baseRev : Math.max(known?.rev ?? 1, 1);
+  // A note opened before its create synced carries baseRev 0; the server
+  // requires baseRev >= 1. A brand-new note's create always yields rev 1, and
+  // any higher rev came from another device — so base 1 forces the correct
+  // three-way merge instead of overwriting that edit (review M3). While the
+  // create is still queued the outbox folds this edit into it and base is moot.
+  const effectiveBase = baseRev >= 1 ? baseRev : 1;
   await enqueueUpdate(outboxStore, id, effectiveBase, patch);
   await refreshPending();
   rebuild();
-  void drainThenPull();
+  await drainThenPull();
+  return byId.get(id)?.rev ?? effectiveBase;
 }
 
 /** Applies a done/snooze action to one reminder on a note and saves. The

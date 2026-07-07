@@ -22,11 +22,35 @@ export function effectiveFireAt(reminder: Reminder): string {
   return reminder.at;
 }
 
+// Recurrence must expand on the reminder's LOCAL wall-clock, not the absolute
+// UTC instant — otherwise BYDAY/BYMONTHDAY rules fire on the wrong day for any
+// local time whose UTC calendar date differs (e.g. a 1 AM IST "weekdays"
+// reminder is Monday locally but Sunday in UTC). rrule.js has no tz support, so
+// we run it in a "floating" frame: a Date whose UTC fields equal the local
+// wall-clock. We shift into that frame, let rrule do the weekday math, then
+// shift back to a real instant carrying the original offset (review H4).
+
+const OFFSET_RE = /([+-])(\d{2}):(\d{2})$/;
+
+/** Minutes east of UTC encoded in an ISO string (0 for a trailing Z). */
+function offsetMinutes(iso: string): number {
+  if (iso.endsWith('Z')) return 0;
+  const m = iso.match(OFFSET_RE);
+  if (!m) return 0;
+  const mins = Number(m[2]) * 60 + Number(m[3]);
+  return m[1] === '-' ? -mins : mins;
+}
+
+const toFloating = (instantMs: number, offMin: number): Date =>
+  new Date(instantMs + offMin * 60000);
+const toReal = (floatingMs: number, offMin: number): number => floatingMs - offMin * 60000;
+
 function rule(reminder: Reminder): InstanceType<typeof RRule> | null {
   if (!reminder.rrule) return null;
   try {
     const opts = RRule.parseString(reminder.rrule);
-    opts.dtstart = new Date(reminder.at);
+    const off = offsetMinutes(reminder.at);
+    opts.dtstart = toFloating(new Date(reminder.at).getTime(), off);
     return new RRule(opts);
   } catch {
     return null;
@@ -34,9 +58,26 @@ function rule(reminder: Reminder): InstanceType<typeof RRule> | null {
 }
 
 /** The next occurrence strictly after `after`, or null for a one-shot (or an
- * exhausted / unparseable rule). */
+ * exhausted / unparseable rule). Returned as a real instant. */
 export function nextOccurrenceAfter(reminder: Reminder, after: Date): Date | null {
-  return rule(reminder)?.after(after, false) ?? null;
+  const r = rule(reminder);
+  if (!r) return null;
+  const off = offsetMinutes(reminder.at);
+  const nextFloating = r.after(toFloating(after.getTime(), off), false);
+  return nextFloating ? new Date(toReal(nextFloating.getTime(), off)) : null;
+}
+
+/** Formats an instant as ISO-8601 keeping a specific UTC offset, so a reminder
+ * rolled forward preserves its original zone instead of collapsing to Z. */
+function formatWithOffset(instant: Date, offMin: number): string {
+  const wall = new Date(instant.getTime() + offMin * 60000);
+  const pad = (n: number) => String(Math.abs(n)).padStart(2, '0');
+  const sign = offMin >= 0 ? '+' : '-';
+  return (
+    `${wall.getUTCFullYear()}-${pad(wall.getUTCMonth() + 1)}-${pad(wall.getUTCDate())}` +
+    `T${pad(wall.getUTCHours())}:${pad(wall.getUTCMinutes())}:${pad(wall.getUTCSeconds())}` +
+    `${sign}${pad(Math.trunc(offMin / 60))}:${pad(offMin % 60)}`
+  );
 }
 
 /**
@@ -48,7 +89,11 @@ export function nextOccurrenceAfter(reminder: Reminder, after: Date): Date | nul
 export function completeReminder(reminder: Reminder, now: Date): Reminder {
   const next = nextOccurrenceAfter(reminder, now);
   if (next) {
-    return { at: next.toISOString(), rrule: reminder.rrule, status: 'active' };
+    return {
+      at: formatWithOffset(next, offsetMinutes(reminder.at)),
+      rrule: reminder.rrule,
+      status: 'active',
+    };
   }
   const done: Reminder = { at: reminder.at, status: 'done' };
   if (reminder.rrule) done.rrule = reminder.rrule;
