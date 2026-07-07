@@ -23,5 +23,17 @@ Insights:
 - The server write path is a synchronous critical section (no await between
   file write and index update). Keep it that way; it is the torn-write
   defense the reviewer called out as a strength.
+- M1 additions: outbox semantics live in core (coalescing, delete-cancels-
+  create, 409/404 recovery, 5xx = retry-later) so they are unit-tested
+  without a browser; the web layer only supplies Dexie storage.
+- State persisted via a React effect is lost if a save unmounts the
+  component before the effect runs (mobile screen switch). Anything that
+  must happen on save (draft clearing) goes in the save handler itself.
+- Workbox autoUpdate SWs need two reloads to serve a new build (install on
+  first, control on second). When "the UI didn't change", reload twice
+  before debugging.
+- Two same-specificity CSS classes: source order decides. .view-chip after
+  .chip-active silently killed the active state; fixed with a compound
+  selector, caught only by looking at pixels.
 
 ---
