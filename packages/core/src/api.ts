@@ -19,6 +19,9 @@ export interface ChangeEntry extends DocChange {
   doc?: ServerDoc;
 }
 
+/** Server-side page cap for the change feed; the sync loop keys off it. */
+export const CHANGES_PAGE = 500;
+
 export interface ChangesResponse {
   changes: ChangeEntry[];
   latestSeq: number;

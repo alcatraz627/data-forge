@@ -1,7 +1,13 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ChangesResponse, ServerDoc, UpdateDocResponse } from '@forge/core';
+import {
+  type ChangesResponse,
+  type ServerDoc,
+  type SyncTransport,
+  type UpdateDocResponse,
+  pullToHead,
+} from '@forge/core';
 import { describe, expect, it } from 'vitest';
 import { type ForgeApp, createForgeApp } from '../src/app.js';
 
@@ -35,17 +41,27 @@ class SimClient {
     readonly fa: ForgeApp,
   ) {}
 
+  /** Uses the real client sync engine, not a reimplementation — the replay
+   * must validate the code the web app actually runs. */
   async pull(): Promise<void> {
-    for (;;) {
-      const res = await this.fa.app.request(`/api/changes?since=${this.cursor}`);
-      const page = (await res.json()) as ChangesResponse;
-      for (const entry of page.changes) {
-        if (entry.deleted) this.docs.delete(entry.id);
-        else if (entry.doc) this.docs.set(entry.id, { rev: entry.rev, body: entry.doc.body });
-      }
-      this.cursor = Math.max(this.cursor, page.latestSeq);
-      if (page.changes.length < 500) return;
-    }
+    const transport: SyncTransport = {
+      changes: async (since) =>
+        (await (
+          await this.fa.app.request(`/api/changes?since=${since}`)
+        ).json()) as ChangesResponse,
+    };
+    await pullToHead(transport, {
+      getCursor: () => this.cursor,
+      setCursor: (n) => {
+        this.cursor = n;
+      },
+      applyChanges: (entries) => {
+        for (const entry of entries) {
+          if (entry.deleted) this.docs.delete(entry.id);
+          else if (entry.doc) this.docs.set(entry.id, { rev: entry.rev, body: entry.doc.body });
+        }
+      },
+    });
   }
 
   async create(i: number): Promise<void> {
@@ -137,4 +153,20 @@ describe('two-client sync replay', () => {
       await runScenario(seed * 7919);
     }
   }, 60_000);
+});
+
+describe('large first sync', () => {
+  it('fetches a corpus larger than one changes page completely', async () => {
+    const dataDir = join(mkdtempSync(join(tmpdir(), 'forge-bulk-')), 'data');
+    const fa = await createForgeApp({ dataDir, gitQuietMs: 600_000 });
+    const TOTAL = 620;
+    for (let i = 0; i < TOTAL; i++) {
+      fa.forge.createDoc({ body: `bulk note ${i}`, source: 'test' });
+    }
+    const fresh = new SimClient('fresh', fa);
+    await fresh.pull();
+    expect(fresh.docs.size).toBe(TOTAL);
+    expect(fresh.cursor).toBe(TOTAL);
+    fa.forge.close();
+  }, 30_000);
 });

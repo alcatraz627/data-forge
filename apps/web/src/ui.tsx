@@ -181,18 +181,32 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
     formality: doc.formality,
     importance: doc.importance,
   });
+  // The revision these edits are based on — captured at open, advanced only by
+  // our own saves, so a concurrent change elsewhere merge-forks instead of
+  // being overwritten.
+  const [baseRev, setBaseRev] = useState(doc.rev);
+  const [saved, setSaved] = useState<{ body: string } & AxisValues>({
+    body: doc.body,
+    durability: doc.durability,
+    formality: doc.formality,
+    importance: doc.importance,
+  });
   const [busy, setBusy] = useState(false);
   const dirty =
-    body !== doc.body ||
-    axes.durability !== doc.durability ||
-    axes.formality !== doc.formality ||
-    axes.importance !== doc.importance;
+    body !== saved.body ||
+    axes.durability !== saved.durability ||
+    axes.formality !== saved.formality ||
+    axes.importance !== saved.importance;
 
   const save = async (): Promise<void> => {
     if (!dirty || busy) return;
     setBusy(true);
     try {
-      await saveDoc(doc.id, { body, ...axes });
+      const res = await saveDoc(doc.id, baseRev, { body, ...axes });
+      if (res) {
+        setBaseRev(res.doc.rev);
+        setSaved({ body, ...axes });
+      }
     } catch (e) {
       flashNotice(e instanceof Error ? `Save failed: ${e.message}` : 'Save failed');
     } finally {

@@ -123,17 +123,26 @@ describe('diverged edits', () => {
 
   it('forks a conflict doc on overlapping stale edits, losing nothing', async () => {
     const fa = await makeApp();
-    const doc = await create(fa, 'hello');
+    const reminder = { at: '2026-07-09T09:00:00+05:30', status: 'active' };
+    const doc = await create(fa, 'hello', {
+      importance: 'critical',
+      pinned: true,
+      reminders: [reminder],
+    });
     await update(fa, doc.id, { baseRev: 1, body: 'hello from A' });
     const second = await update(fa, doc.id, { baseRev: 1, body: 'hello from B' });
     expect(second.body.merged).toBe(true);
     expect(second.body.doc.body).toBe('hello from B');
     expect(second.body.conflictDocId).toBeDefined();
 
+    // The losing side survives whole: body AND metadata (reminders, pinned,
+    // axes) — not just the text.
     const conflict = fa.forge.getDoc(second.body.conflictDocId as string);
     expect(conflict?.body).toBe('hello from A');
     expect(conflict?.source).toBe(`conflict:${doc.id}`);
-    expect(conflict?.importance).toBe('high');
+    expect(conflict?.importance).toBe('critical');
+    expect(conflict?.pinned).toBe(true);
+    expect(conflict?.reminders).toEqual([reminder]);
   });
 
   it('applies frontmatter-only stale updates without touching the newer body', async () => {

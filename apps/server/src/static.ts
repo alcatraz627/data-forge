@@ -27,11 +27,13 @@ export function addStaticRoutes(app: Hono, dist: string): void {
   app.get('*', (c) => {
     const path = decodeURIComponent(new URL(c.req.url).pathname);
     if (path.startsWith('/api/')) return c.json({ error: 'not found' }, 404);
-    const file = resolve(root, `.${normalize(path)}`);
-    const target =
-      file.startsWith(root) && existsSync(file) && statSync(file).isFile()
-        ? file
-        : join(root, 'index.html');
+    let target = join(root, 'index.html');
+    try {
+      const file = resolve(root, `.${normalize(path)}`);
+      if (file.startsWith(root) && existsSync(file) && statSync(file).isFile()) target = file;
+    } catch {
+      // malformed paths (e.g. embedded null bytes) fall back to the SPA shell
+    }
     return new Response(new Uint8Array(readFileSync(target)), {
       headers: { 'content-type': TYPES[extname(target)] ?? 'application/octet-stream' },
     });

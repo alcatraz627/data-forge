@@ -179,17 +179,20 @@ push: PUT /api/docs/:id {baseRev, content}
               ▼
         git merge-file (base, client, head)
               ├─ clean  ─▶ commit merged, return {rev, merged: true}
-              └─ dirty  ─▶ commit client copy as sibling file
-                           01J1QG8Z3W.conflict-pixel-0707.md
+              └─ dirty  ─▶ the incoming save wins the note id; the previous
+                           head is preserved WHOLE (body + reminders + axes)
+                           as a new doc with source conflict:<id>
                            → shows in the Conflicts view. Nothing is lost.
 ```
 
 - Pull: `GET /api/changes?since=<seq>` returns changed docs + tombstones.
 - Nudge: SSE `/api/events` says "something changed"; clients pull.
 - Deletes: tombstone in the feed + `git rm` (history keeps the body).
-- Frontmatter conflicts merge per-field by timestamp; only body conflicts
-  fork sibling files. Expected conflict rate for one human: ~zero. The
-  machinery exists so the rare case never destroys data.
+- Frontmatter-only diverged updates resolve last-writer-wins per sent field
+  (single user; per-field timestamps would be over-engineering). Only body
+  conflicts fork a conflict doc, and the last writer keeps the canonical
+  ULID. Expected conflict rate for one human: ~zero. The machinery exists so
+  the rare case never destroys data.
 - The frontmatter serializer must be **roundtrip-stable** (stable key order,
   no gratuitous reformatting) or sync churns git history with noise. Contract
   test required.

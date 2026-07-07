@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import {
   CAPTURE_DEFAULTS,
+  CHANGES_PAGE,
   type ChangeEntry,
   type ChangesResponse,
   type CreateDocBody,
@@ -260,12 +261,17 @@ export class Forge {
         return finish({ ...head, ...fields, body: merged.text, updated: now }, true);
       }
     }
+    // The losing side is preserved whole — body AND metadata. Reminders,
+    // pinned state, and axes ride along or "nothing is lost" would only be
+    // true of the text (M0 review, finding M1).
     const conflict = this.createDoc({
       body: head.body,
       source: `conflict:${id}`,
-      durability: 'working',
+      durability: head.durability,
       formality: head.formality,
-      importance: 'high',
+      importance: head.importance,
+      pinned: head.pinned,
+      reminders: head.reminders,
     });
     const conflictDocId = 'ok' in conflict ? conflict.ok.id : undefined;
     return finish({ ...head, ...fields, body: input.body, updated: now }, true, conflictDocId);
@@ -296,8 +302,8 @@ export class Forge {
 
   changes(since: number): ChangesResponse {
     const rows = this.db
-      .prepare('SELECT * FROM docs WHERE seq > ? ORDER BY seq ASC LIMIT 500')
-      .all(since) as unknown as DocRow[];
+      .prepare('SELECT * FROM docs WHERE seq > ? ORDER BY seq ASC LIMIT ?')
+      .all(since, CHANGES_PAGE) as unknown as DocRow[];
     const changes: ChangeEntry[] = rows.map((row) =>
       row.deleted === 1
         ? { seq: row.seq, id: row.id, rev: row.rev, deleted: true }

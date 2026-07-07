@@ -113,15 +113,30 @@ export async function captureNote(input: Omit<CreateDocBody, 'source'>): Promise
   rebuild();
 }
 
-export async function saveDoc(id: string, patch: Omit<UpdateDocBody, 'baseRev'>): Promise<void> {
-  const known = byId.get(id);
-  if (!known) return;
-  const res: UpdateDocResponse = await api.updateDoc(id, { baseRev: known.rev, ...patch });
-  byId.set(id, res.doc);
-  rebuild();
-  if (res.conflictDocId)
-    flashNotice('Diverged edits: the other version was kept as a conflict note');
-  else if (res.merged) flashNotice('Merged with a newer version of this note');
+/** Saves against the revision the edits were actually based on (captured when
+ * the editor opened) — NOT the latest pulled rev, or a concurrent change from
+ * another device would be silently overwritten instead of merge-forked
+ * (M0 review, finding H1). Returns null if the note was deleted elsewhere. */
+export async function saveDoc(
+  id: string,
+  baseRev: number,
+  patch: Omit<UpdateDocBody, 'baseRev'>,
+): Promise<UpdateDocResponse | null> {
+  try {
+    const res: UpdateDocResponse = await api.updateDoc(id, { baseRev, ...patch });
+    byId.set(id, res.doc);
+    rebuild();
+    if (res.conflictDocId)
+      flashNotice('Diverged edits: the previous version was kept as a conflict note');
+    else if (res.merged) flashNotice('Merged with a newer version of this note');
+    return res;
+  } catch (e) {
+    if (e instanceof api.ApiError && e.status === 404) {
+      flashNotice('This note was deleted on another device');
+      return null;
+    }
+    throw e;
+  }
 }
 
 export async function removeDoc(id: string): Promise<void> {

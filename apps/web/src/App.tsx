@@ -1,3 +1,4 @@
+import type { ServerDoc } from '@forge/core';
 import { useEffect, useMemo, useState } from 'react';
 import { filterDocs, startSync, useForge } from './store';
 import { Capture, EditorPanel, NoteCard } from './ui';
@@ -19,7 +20,10 @@ export default function App() {
   const [theme, toggleTheme] = useTheme();
   const snap = useForge();
   const [query, setQuery] = useState('');
-  const [openId, setOpenId] = useState<string | null>(null);
+  // Captured at click time: the editor works on a stable snapshot (its own
+  // baseRev handles concurrent changes), so a live delete elsewhere can't
+  // yank the panel out from under in-progress typing.
+  const [openDoc, setOpenDoc] = useState<ServerDoc | null>(null);
 
   useEffect(() => startSync(), []);
 
@@ -41,7 +45,6 @@ export default function App() {
   }, []);
 
   const docs = useMemo(() => filterDocs(snap.docs, query), [snap.docs, query]);
-  const openDoc = (openId && snap.docs.find((d) => d.id === openId)) || null;
 
   return (
     <div className="app">
@@ -79,12 +82,12 @@ export default function App() {
                   : 'Nothing here yet. Drop your first thought above.'}
             </p>
           ) : (
-            docs.map((d) => <NoteCard key={d.id} doc={d} onOpen={() => setOpenId(d.id)} />)
+            docs.map((d) => <NoteCard key={d.id} doc={d} onOpen={() => setOpenDoc(d)} />)
           )}
         </section>
       </main>
 
-      {openDoc && <EditorPanel doc={openDoc} onClose={() => setOpenId(null)} />}
+      {openDoc && <EditorPanel key={openDoc.id} doc={openDoc} onClose={() => setOpenDoc(null)} />}
     </div>
   );
 }
