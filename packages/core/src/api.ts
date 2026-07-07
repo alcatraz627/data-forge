@@ -43,6 +43,9 @@ export interface CreateDocBody {
   /** Client-generated ULID for offline capture; server assigns one if absent. */
   id?: string;
   body: string;
+  /** ISO-8601 timestamps to preserve on import/backfill; default to now. */
+  created?: string;
+  updated?: string;
   durability?: Durability;
   formality?: Formality;
   importance?: Importance;

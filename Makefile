@@ -21,3 +21,8 @@ deploy: tokens
 
 logs:
 	tail -f ~/Library/Logs/forge-server.log
+
+# Import a Google Takeout export into the running server.
+# Usage: make import DIR=~/Downloads/Takeout
+import:
+	pnpm --filter @forge/server exec tsx src/import/cli.ts "$(DIR)"

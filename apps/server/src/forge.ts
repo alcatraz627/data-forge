@@ -196,8 +196,8 @@ export class Forge {
     const now = nowIso();
     const doc: Doc = {
       id,
-      created: now,
-      updated: now,
+      created: input.created ?? now,
+      updated: input.updated ?? input.created ?? now,
       durability: input.durability ?? CAPTURE_DEFAULTS.durability,
       formality: input.formality ?? CAPTURE_DEFAULTS.formality,
       importance: input.importance ?? CAPTURE_DEFAULTS.importance,

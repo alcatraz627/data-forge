@@ -33,6 +33,20 @@ After code changes: `make deploy` (rebuilds web, restarts the service).
 Logs: `make logs`. The service serves API + web app on :5040 and stores
 data in `~/DataForge` (its own git repo).
 
+## Import from Google Keep + Tasks
+
+Export via [Google Takeout](https://takeout.google.com/) (select Keep and
+Tasks), unzip, then with the server running:
+
+```bash
+make import DIR=~/Downloads/Takeout
+```
+
+Keep notes carry over their pin/archive state, checklists (as markdown task
+lists), labels (as hashtags), and original timestamps; Tasks become notes
+with reminders (completed tasks land archived). Run it once against a fresh
+store — it does not dedup on re-run.
+
 ## Layout
 
 | Path | What |

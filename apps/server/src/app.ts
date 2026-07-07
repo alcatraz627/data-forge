@@ -27,6 +27,9 @@ const SOURCE_RE = /^[\w.:@-]{1,64}$/;
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[]): v is T =>
   typeof v === 'string' && (allowed as readonly string[]).includes(v);
 
+const isIsoDate = (v: unknown): boolean =>
+  typeof v === 'string' && v.length <= 40 && !Number.isNaN(Date.parse(v));
+
 function validReminders(v: unknown): Reminder[] | null {
   if (v === undefined) return [];
   if (!Array.isArray(v)) return null;
@@ -65,6 +68,8 @@ function parseCreate(raw: unknown): Validated<CreateDocBody> {
   if (typeof f.source !== 'string' || !SOURCE_RE.test(f.source)) return { error: 'bad source' };
   if (f.id !== undefined && (typeof f.id !== 'string' || !isDocId(f.id)))
     return { error: 'bad id' };
+  if (f.created !== undefined && !isIsoDate(f.created)) return { error: 'bad created' };
+  if (f.updated !== undefined && !isIsoDate(f.updated)) return { error: 'bad updated' };
   const axisErr = axisErrors(f);
   if (axisErr) return { error: axisErr };
   const reminders = validReminders(f.reminders);
@@ -74,6 +79,8 @@ function parseCreate(raw: unknown): Validated<CreateDocBody> {
       ...(f.id !== undefined ? { id: f.id as string } : {}),
       body: f.body,
       source: f.source,
+      ...(f.created !== undefined ? { created: f.created as string } : {}),
+      ...(f.updated !== undefined ? { updated: f.updated as string } : {}),
       ...(f.durability !== undefined ? { durability: f.durability as never } : {}),
       ...(f.formality !== undefined ? { formality: f.formality as never } : {}),
       ...(f.importance !== undefined ? { importance: f.importance as never } : {}),
