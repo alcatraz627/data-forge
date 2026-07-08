@@ -46,7 +46,11 @@ type ViewableDoc = Pick<
  * archived docs surface only in Archive. Both would be noise elsewhere. */
 export function matchesView(doc: ViewableDoc, view: ViewDef): boolean {
   const f = view.filter;
-  if ((f.archived ?? false) !== doc.archived) return false;
+  // Coalesce doc.archived too: a doc from an older server omits the field, and a
+  // strict `false !== undefined` would hide every such note from every normal
+  // view. Tolerate the missing field rather than filtering the note into
+  // oblivion.
+  if ((f.archived ?? false) !== (doc.archived ?? false)) return false;
   if (f.sourcePrefix !== undefined) {
     if (!doc.source.startsWith(f.sourcePrefix)) return false;
   } else if (view.id !== 'all' && doc.source.startsWith('conflict:')) {
