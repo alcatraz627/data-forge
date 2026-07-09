@@ -52,4 +52,15 @@ describe('default views', () => {
     expect(matchesView(archived, view('scratch'))).toBe(false);
     expect(matchesView(doc(), view('archive'))).toBe(false);
   });
+
+  // Regression: a pre-M1 server omits `archived` entirely. Strict comparison
+  // against undefined hid every such note from every normal view — the phone
+  // "data getting deleted" incident (2026-07-08). Docs without the field must
+  // count as not-archived.
+  it('a doc with no archived field still matches active views', () => {
+    const legacy = doc({ archived: undefined as unknown as boolean });
+    expect(matchesView(legacy, view('all'))).toBe(true);
+    expect(matchesView(legacy, view('scratch'))).toBe(true);
+    expect(matchesView(legacy, view('archive'))).toBe(false);
+  });
 });
