@@ -444,3 +444,32 @@ describe('git batching', () => {
     expect(status.trim()).toBe('');
   });
 });
+
+describe('canvas bodies over the wire', () => {
+  // Regression: bodies used to be read back from the FTS table, which
+  // deliberately stores '' for canvases (review L4) — so the sync feed and
+  // GET handed every canvas to clients with an empty body. Bodies must come
+  // from the files, which are canonical.
+  it('a canvas body survives the changes feed and GET', async () => {
+    const fa = await makeApp();
+    const canvasBody = '<!-- forge:canvas v1 -->\n{"shapes":{"a":1}}';
+    const doc = await create(fa, canvasBody, { durability: 'working', formality: 'draft' });
+
+    const got = await fa.app.request(`/api/docs/${doc.id}`);
+    expect(((await got.json()) as ServerDoc).body).toBe(canvasBody);
+
+    const res = await fa.app.request('/api/changes?since=0');
+    const feed = (await res.json()) as { changes: Array<{ id: string; doc?: ServerDoc }> };
+    const entry = feed.changes.find((c) => c.id === doc.id);
+    expect(entry?.doc?.body).toBe(canvasBody);
+    expect(entry?.doc?.title).toBe('Canvas');
+
+    // Idempotent create retry (offline outbox replays) must still match.
+    const retry = await fa.app.request('/api/docs', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ id: doc.id, body: canvasBody, source: 'test' }),
+    });
+    expect(retry.status).toBe(201);
+  });
+});

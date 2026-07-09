@@ -55,6 +55,10 @@ interface DocRow {
 
 export type CreateResult = { ok: ServerDoc } | { error: 'id_exists' };
 
+/** Bump when deriveTitle/derivePreview semantics change, so boot re-derives
+ * the stored titles/previews for rows written under the old rules. */
+const DERIVE_VERSION = '2';
+
 /**
  * The single owner of the data directory. Every mutation flows through here:
  * file write → index update → change-feed seq → git batch → SSE nudge, so
@@ -73,6 +77,41 @@ export class Forge {
   ) {
     this.db = openDb(join(dataDir, 'meta', 'index.sqlite'));
     this.batcher = new GitBatcher(dataDir, opts.gitQuietMs);
+    this.rederiveIndexedText();
+  }
+
+  /** Heals stored titles/previews written under older derivation rules (e.g.
+   * canvas notes indexed before the marker earned a friendly title). Only the
+   * derived index changes — the files are untouched and revs stay put — but
+   * each corrected row takes a fresh seq so synced clients pull the fix
+   * instead of caching the stale text forever. Runs once per DERIVE_VERSION. */
+  private rederiveIndexedText(): void {
+    const stamp = this.db
+      .prepare("SELECT value FROM kv WHERE key = 'derive_version'")
+      .get() as unknown as { value: string } | undefined;
+    if (stamp?.value === DERIVE_VERSION) return;
+    const rows = this.db
+      .prepare('SELECT * FROM docs WHERE deleted = 0')
+      .all() as unknown as DocRow[];
+    for (const row of rows) {
+      const body = this.headDoc(row).body;
+      const title = deriveTitle(body);
+      const preview = derivePreview(body);
+      if (title === row.title && preview === row.preview) continue;
+      tx(this.db, () => {
+        const seq = nextSeq(this.db);
+        this.db
+          .prepare('UPDATE docs SET title = ?, preview = ?, seq = ? WHERE id = ?')
+          .run(title, preview, seq, row.id);
+        this.db.prepare('DELETE FROM docs_fts WHERE id = ?').run(row.id);
+        this.db
+          .prepare('INSERT INTO docs_fts (id, title, body) VALUES (?, ?, ?)')
+          .run(row.id, title, isCanvas(body) ? '' : body);
+      });
+    }
+    this.db
+      .prepare("INSERT OR REPLACE INTO kv (key, value) VALUES ('derive_version', ?)")
+      .run(DERIVE_VERSION);
   }
 
   abs(rel: string): string {
@@ -91,7 +130,16 @@ export class Forge {
       | undefined;
   }
 
-  private bodyOf(id: string): string {
+  /** A doc's body, read from its file — the files are canonical (ADR-0001).
+   * The FTS copy is NOT a body store: it deliberately omits canvas JSON
+   * (review L4), so reading it back would hand out empty canvas bodies. */
+  private bodyOf(row: DocRow): string {
+    return this.headDoc(row).body;
+  }
+
+  /** The search index's copy of a body ('' for canvases). Only a last-resort
+   * fallback for when the file itself cannot be read. */
+  private ftsBodyOf(id: string): string {
     const row = this.db.prepare('SELECT body FROM docs_fts WHERE id = ?').get(id) as unknown as
       | { body: string }
       | undefined;
@@ -198,7 +246,7 @@ export class Forge {
     const id = input.id ?? newId();
     const existing = this.rowById(id);
     if (existing && existing.deleted === 0) {
-      if (this.bodyOf(id) === input.body) {
+      if (this.bodyOf(existing) === input.body) {
         return { ok: this.toServerDoc(existing, input.body) };
       }
       return { error: 'id_exists' };
@@ -227,7 +275,7 @@ export class Forge {
   getDoc(id: string): ServerDoc | null {
     const row = this.rowById(id);
     if (!row || row.deleted === 1) return null;
-    return this.toServerDoc(row, this.bodyOf(id));
+    return this.toServerDoc(row, this.bodyOf(row));
   }
 
   updateDoc(id: string, input: UpdateDocBody): UpdateDocResponse | null {
@@ -303,7 +351,7 @@ export class Forge {
       if (parsed) return parsed.doc;
       return docFromExternal(text, row.id, row.updated);
     } catch {
-      return this.toServerDoc(row, this.bodyOf(row.id));
+      return this.toServerDoc(row, this.ftsBodyOf(row.id));
     }
   }
 
@@ -329,7 +377,7 @@ export class Forge {
             id: row.id,
             rev: row.rev,
             deleted: false,
-            doc: this.toServerDoc(row, this.bodyOf(row.id)),
+            doc: this.toServerDoc(row, this.bodyOf(row)),
           },
     );
     return { changes, latestSeq: currentSeq(this.db) };
