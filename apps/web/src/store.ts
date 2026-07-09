@@ -306,8 +306,19 @@ export async function actOnReminder(
     action === 'done'
       ? completeReminder(current, now)
       : snoozeReminder(current, snoozeUntil ?? new Date(now.getTime() + 3_600_000));
+  const prev = doc.reminders;
   const reminders = doc.reminders.map((r, i) => (i === reminderIndex ? next : r));
-  await saveDoc(docId, doc.rev, { reminders });
+  const rev = await saveDoc(docId, doc.rev, { reminders });
+  // A completed/snoozed reminder is frequent and reversible — undo beats a
+  // confirm. Restoring writes the prior reminders array back through the
+  // normal save path, so it works offline like everything else.
+  flashNotice(action === 'done' ? 'Marked done' : 'Snoozed to tomorrow', {
+    label: 'Undo',
+    run: () => {
+      const fresh = byId.get(docId);
+      void saveDoc(docId, fresh?.rev ?? rev, { reminders: prev }).then(() => clearNotice());
+    },
+  });
 }
 
 export async function removeDoc(id: string): Promise<void> {

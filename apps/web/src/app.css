@@ -11,6 +11,9 @@
   --ring: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   --tap: 40px;
+  /* The bottom tab bar's vertical budget. The editor (sheet AND fullscreen)
+     insets by this so the bar stays visible and tappable while editing. */
+  --tabbar-h: calc(60px + env(safe-area-inset-bottom));
 }
 
 :root[data-theme="light"] {
@@ -102,18 +105,50 @@ body {
   white-space: nowrap;
 }
 
-.sync-dot {
+/* Stateful sync chip: synced (green dot) / pending (amber dot + queued count)
+   / offline (red dot + word). Shape changes with colour, so no state rides on
+   colour alone; the whole chip is a 40px-min tap target with a detail title. */
+.sync-chip {
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border-color: transparent;
+  gap: 6px;
+  font-size: var(--text-sm);
+  color: var(--dim);
+}
+
+.sync-chip .sync-dot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--faint);
   flex: none;
   transition: background 0.3s var(--ease);
 }
 
-.sync-dot.on {
+.sync-chip[data-state="synced"] .sync-dot {
   background: var(--ok);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
+}
+
+.sync-chip[data-state="pending"] .sync-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.sync-chip[data-state="pending"] .sync-count {
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.sync-chip[data-state="offline"] .sync-dot {
+  background: var(--danger);
+}
+
+.sync-chip[data-state="offline"] .sync-label {
+  color: var(--danger);
 }
 
 /* ── Buttons ───────────────────────────────────────────────────────── */
@@ -207,8 +242,33 @@ button.danger:hover {
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
   box-shadow: var(--shadow-1);
+}
+
+/* Axes summary and Save share one line — no dead band below the textarea. */
+.capture-foot {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.capture-foot .axis-disclosure {
+  flex: 1;
+  min-width: 0;
+}
+
+.start-canvas {
+  justify-self: start;
+  min-height: 34px;
+  padding: var(--space-1) var(--space-2);
+  border-color: transparent;
+  color: var(--faint);
+  font-size: var(--text-sm);
+}
+
+.start-canvas:hover {
+  color: var(--accent);
 }
 
 .capture textarea,
@@ -448,10 +508,14 @@ button.danger:hover {
   align-items: center;
 }
 
+/* Fixed-width type gutter: titles align whether or not a kind glyph is
+   present, and the glyph stays monochrome so it never fights the rail. */
 .card-kind {
   color: var(--dim);
   flex: none;
   display: inline-flex;
+  width: 20px;
+  justify-content: flex-start;
 }
 
 /* The per-card quick-action trigger: compact so cards stay tight, and on
@@ -542,21 +606,48 @@ button.danger:hover {
   height: 0.95em;
 }
 
-/* Importance + reminder spend colour on the TEXT only; the pill stays neutral
-   so the page reads calm (minimal direction). */
+/* One colour, one meaning. Importance tags read as neutral text beside a
+   coloured dot on a faintly-tinted pill (the rail + title weight stay the
+   primary channels); reminder chips are neutral text behind an amber bell —
+   the chip's colour is free to mean time-status only, so red on a chip is
+   ALWAYS "overdue", never "important". */
+.tag[data-kind="importance"] {
+  gap: 6px;
+}
+
+.tag[data-kind="importance"]::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: none;
+}
+
 .tag[data-kind="importance"][data-value="high"] {
-  color: var(--imp-high);
+  background: color-mix(in srgb, var(--imp-high) 14%, var(--surface-2));
+}
+
+.tag[data-kind="importance"][data-value="high"]::before {
+  background: var(--imp-high);
 }
 
 .tag[data-kind="importance"][data-value="critical"] {
-  color: var(--imp-critical);
+  background: color-mix(in srgb, var(--imp-critical) 16%, var(--surface-2));
 }
 
-.tag[data-kind="reminder"] {
+.tag[data-kind="importance"][data-value="critical"]::before {
+  background: var(--imp-critical);
+}
+
+.tag[data-kind="reminder"] .icon {
   color: var(--accent);
 }
 
 .tag[data-kind="reminder"][data-overdue="true"] {
+  color: var(--danger);
+}
+
+.tag[data-kind="reminder"][data-overdue="true"] .icon {
   color: var(--danger);
 }
 
@@ -650,7 +741,9 @@ button.danger:hover {
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
   padding: var(--space-1) var(--space-2) calc(var(--space-1) + env(safe-area-inset-bottom));
-  z-index: 20;
+  /* Above the editor backdrop (z 30): navigation stays tappable while a note
+     is open — tapping a tab save-closes the editor via closeToken. */
+  z-index: 40;
 }
 
 .bottom-bar .tab {
@@ -714,14 +807,50 @@ button.danger:hover {
   animation: pop 0.18s var(--ease);
 }
 
-.editor textarea {
-  min-height: 220px;
+/* Head row hosts the sheet↔fullscreen toggle, tucked where the grab handle
+   lives so it reads as "resize this". */
+.editor-head {
+  display: flex;
+  justify-content: flex-end;
+  margin: calc(var(--space-2) * -1) calc(var(--space-2) * -1) calc(var(--space-3) * -1) 0;
 }
 
+.editor-head .icon-btn {
+  min-height: 34px;
+  min-width: 34px;
+  color: var(--faint);
+}
+
+/* Fullscreen: the editor becomes the screen. On phones it stops above the
+   tab bar (see the mobile block below) so navigation stays reachable. */
+.editor-fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-height: none;
+  border: none;
+  border-radius: 0;
+  animation: fade 0.15s var(--ease);
+}
+
+.editor-fullscreen .rich-editor .ProseMirror,
+.editor-fullscreen textarea.raw-editor {
+  max-height: none;
+  min-height: 48vh;
+}
+
+.editor textarea {
+  min-height: 160px;
+}
+
+/* Canvas host: two grid rows — the drawing surface takes everything, the
+   action bar keeps its natural height. Canvas notes only ever open in the
+   fullscreen host (a scrolling sheet fights tldraw for both height and touch
+   gestures), so no contained-canvas sizing exists anymore. */
 .editor-canvas {
-  width: min(1100px, 96vw);
-  height: 88vh;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--space-3);
 }
 
 .canvas-surface {
@@ -734,8 +863,18 @@ button.danger:hover {
   overflow: hidden;
 }
 
-.editor-canvas .canvas-surface {
-  height: auto;
+.canvas-loading {
+  display: grid;
+  place-content: center;
+  gap: var(--space-2);
+  text-align: center;
+  color: var(--dim);
+  min-height: 40vh;
+}
+
+.canvas-loading span {
+  font-size: var(--text-sm);
+  color: var(--faint);
 }
 
 /* A labelled group wraps the axis picker + reminders so the editor reads as
@@ -810,7 +949,9 @@ button.danger:hover {
   font-family: var(--font-read);
   font-size: var(--text-md);
   line-height: 1.6;
-  min-height: 220px;
+  /* Short notes get a short sheet; the well grows with content instead of
+     opening as a fixed black slab. Fullscreen lifts the cap entirely. */
+  min-height: 96px;
   max-height: 55vh;
   overflow-y: auto;
   padding: var(--space-3);
@@ -937,18 +1078,60 @@ button.ghost.active {
 /* ── Reminders ─────────────────────────────────────────────────────── */
 .reminder-editor {
   display: grid;
+  gap: var(--space-3);
+}
+
+.reminder-block {
+  display: grid;
   gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
 
 .reminder-row {
   display: flex;
   gap: var(--space-2);
   align-items: center;
-  flex-wrap: wrap;
 }
 
-.reminder-row input[type="datetime-local"],
-.reminder-row select {
+/* The human-readable time IS the control; the real datetime input hides
+   behind it and surfaces only its native picker (or itself, as fallback). */
+.reminder-time {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+}
+
+.time-button {
+  flex: 1;
+  justify-content: flex-start;
+  background: transparent;
+  border-color: transparent;
+  font-variant-numeric: tabular-nums;
+  padding-inline: var(--space-2);
+}
+
+.time-button:hover {
+  background: var(--surface-2);
+}
+
+.picker-anchor {
+  position: absolute;
+  inset: auto 0 0 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+  padding: 0;
+}
+
+.reminder-time-raw {
+  flex: 1;
+  min-width: 160px;
   font: inherit;
   color: inherit;
   background: var(--bg);
@@ -957,11 +1140,6 @@ button.ghost.active {
   padding: var(--space-2) var(--space-3);
   min-height: var(--tap);
   color-scheme: dark light;
-}
-
-.reminder-row input[type="datetime-local"] {
-  flex: 1;
-  min-width: 160px;
 }
 
 .reminder-row .reminder-bell {
@@ -1057,16 +1235,35 @@ button.ghost.active {
   overflow: hidden;
 }
 
-.agenda-item .agenda-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--accent);
+/* Leading complete button: the row's most frequent action gets the biggest,
+   nearest target. The ring carries the time-status colour; the check fills
+   in on hover/press. */
+.agenda-complete {
   flex: none;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 999px;
+  background: transparent;
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  color: transparent;
 }
 
-.agenda-item.is-overdue .agenda-dot {
-  background: var(--danger);
+.agenda-item.is-overdue .agenda-complete {
+  border-color: color-mix(in srgb, var(--danger) 65%, transparent);
+}
+
+.agenda-complete:hover,
+.agenda-complete:active {
+  color: var(--ok);
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+
+.agenda-complete .icon {
+  width: 1.3em;
+  height: 1.3em;
 }
 
 .agenda-main {
@@ -1212,6 +1409,40 @@ button.ghost.active {
   bottom: calc(76px + env(safe-area-inset-bottom));
 }
 
+/* ── Search launchpad (pre-query) ──────────────────────────────────── */
+.search-hint {
+  color: var(--faint);
+  font-size: var(--text-sm);
+  text-align: center;
+  margin: var(--space-3) 0 0;
+}
+
+/* ── Density ───────────────────────────────────────────────────────── */
+/* Compact is the phone default (terminal-dense taste): tighter cards, more
+   rows per screen. Tap targets and the importance rail never shrink. */
+[data-density="compact"] .stream {
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+[data-density="compact"] .card {
+  padding: var(--space-2) var(--space-3);
+  gap: var(--space-1);
+  border-radius: var(--radius-md);
+}
+
+[data-density="compact"] .card-preview {
+  -webkit-line-clamp: 1;
+}
+
+[data-density="compact"] .agenda {
+  gap: var(--space-4);
+}
+
+[data-density="compact"] .agenda-item {
+  padding: var(--space-1) var(--space-2);
+}
+
 /* ── Motion ────────────────────────────────────────────────────────── */
 @keyframes fade {
   from {
@@ -1240,7 +1471,10 @@ button.ghost.active {
 }
 
 /* ── Mobile: editor becomes a bottom sheet ─────────────────────────── */
-@media (max-width: 560px) {
+/* Breakpoint MUST match MOBILE_BREAKPOINT_PX in src/breakpoint.ts (640):
+   639px here = "below 640". Changing one without the other re-creates the
+   mobile-chrome-with-desktop-editor gap band. */
+@media (max-width: 639px) {
   .editor-backdrop {
     padding: 0;
     align-items: stretch;
@@ -1252,7 +1486,8 @@ button.ghost.active {
     max-height: 94vh;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     border: none;
-    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+    /* Clears the tab bar, which now sits above the sheet (z 40). */
+    padding-bottom: calc(var(--space-3) + var(--tabbar-h));
     animation: sheet-up 0.24s var(--ease);
   }
 
@@ -1266,13 +1501,34 @@ button.ghost.active {
     margin: 0 auto var(--space-1);
   }
 
-  .editor-canvas {
-    height: 100vh;
-    max-height: 100vh;
+  /* Fullscreen on a phone stops above the tab bar: editing and navigation
+     coexist, which is the whole point of the fullscreen host. */
+  .editor-fullscreen {
+    margin-top: 0;
+    height: calc(100dvh - var(--tabbar-h));
+    max-height: none;
     border-radius: 0;
+    animation: fade 0.15s var(--ease);
+  }
+
+  /* No grab handle in fullscreen — it isn't a draggable sheet, and the
+     pseudo-element would occupy the canvas grid's 1fr row. */
+  .editor-fullscreen::before {
+    display: none;
+  }
+
+  /* Fullscreen already stops above the tab bar via its height; the sheet's
+     tab-bar padding would double-count the clearance. */
+  .editor-fullscreen {
+    padding-bottom: var(--space-3);
   }
 
   .editor textarea {
-    min-height: 32vh;
+    min-height: 96px;
+  }
+
+  .editor-fullscreen textarea.raw-editor,
+  .editor-fullscreen .rich-editor .ProseMirror {
+    min-height: 42vh;
   }
 }

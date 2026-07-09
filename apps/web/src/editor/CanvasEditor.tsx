@@ -13,10 +13,14 @@ export default function CanvasEditor({
   value: string;
   onChange: (body: string) => void;
 }) {
+  const dark = document.documentElement.dataset.theme !== 'light';
   return (
     <div className="canvas-surface">
       <Tldraw
         onMount={(editor) => {
+          // Follow the app's theme toggle, not the OS: the rest of the editor
+          // chrome already does.
+          editor.user.updateUserPreferences({ colorScheme: dark ? 'dark' : 'light' });
           const snapshot = parseCanvas(value);
           if (snapshot && Object.keys(snapshot as object).length > 0) {
             try {

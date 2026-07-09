@@ -17,8 +17,9 @@ import {
   isCanvas,
   nowIso,
 } from '@forge/core';
-import { type JSX, Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { Component, type JSX, type ReactNode, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import * as api from './api';
+import { MOBILE_MEDIA_QUERY } from './breakpoint';
 import { NoteEditor } from './editor/NoteEditor';
 import { Icon, type IconName } from './icons';
 import {
@@ -44,12 +45,17 @@ function isoToLocalInput(iso: string): string {
 // carry their zone so recurrence expands on local wall-clock (review H4).
 const localInputToIso = (local: string): string => nowIso(new Date(local));
 
+/** THE reminder time formatter — list chips, agenda rows, and the editor all
+ * speak through here so a date never renders two ways (or as ambiguous
+ * DD/MM). Weekday always, year only when it isn't this year. */
 export function reminderLabel(at: string): string {
   const d = new Date(at);
   if (Number.isNaN(d.getTime())) return at;
   return d.toLocaleString(undefined, {
+    weekday: 'short',
     month: 'short',
     day: 'numeric',
+    ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}),
     hour: 'numeric',
     minute: '2-digit',
   });
@@ -58,9 +64,9 @@ export function reminderLabel(at: string): string {
 export type MobileScreen = 'notes' | 'agenda' | 'search' | 'capture';
 
 export function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+  const [mobile, setMobile] = useState(() => window.matchMedia(MOBILE_MEDIA_QUERY).matches);
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 639px)');
+    const mq = window.matchMedia(MOBILE_MEDIA_QUERY);
     const onChange = (): void => setMobile(mq.matches);
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
@@ -319,7 +325,7 @@ export function AxisDisclosure({
 
 /** The drop-a-thought box. Drafts persist across reloads so a half-typed
  * thought is never lost to a stray tab close. */
-export function Capture({ onSaved }: { onSaved?: () => void }) {
+export function Capture({ onSaved, onCanvas }: { onSaved?: () => void; onCanvas?: () => void }) {
   const [text, setText] = useState(() => localStorage.getItem('forge-draft') ?? '');
   const [axes, setAxes] = useState<AxisValues>({ ...CAPTURE_DEFAULTS });
   const [busy, setBusy] = useState(false);
@@ -366,25 +372,44 @@ export function Capture({ onSaved }: { onSaved?: () => void }) {
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void save();
         }}
       />
-      <AxisDisclosure value={axes} onChange={setAxes} />
-      <div className="capture-actions">
+      {/* Axes and Save share one row: no dead band between the last control
+          and the action, and the eye travels summary → Save in a line. */}
+      <div className="capture-foot">
+        <AxisDisclosure value={axes} onChange={setAxes} />
         <button
           type="button"
           className="primary"
           disabled={!text.trim() || busy}
           onClick={() => void save()}
         >
-          Save
+          {busy ? 'Saving…' : 'Save'}
         </button>
       </div>
+      {onCanvas && (
+        <button type="button" className="ghost start-canvas" onClick={onCanvas}>
+          <Icon name="pencil" />
+          or start a canvas
+        </button>
+      )}
     </section>
   );
+}
+
+/** The card's leading type glyph: what KIND of note is this, at a glance.
+ * One deterministic pick — canvas beats reminder beats reference — and plain
+ * notes get none, so the gutter stays signal, not wallpaper. */
+function cardKind(doc: ServerDoc, canvas: boolean, hasReminder: boolean): IconName | null {
+  if (canvas) return 'pencil';
+  if (hasReminder) return 'bell';
+  if (doc.durability === 'durable' || doc.durability === 'permanent') return 'pin';
+  return null;
 }
 
 export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }) {
   const canvas = isCanvas(doc.body);
   const reminder = doc.reminders.find((r) => r.status !== 'done');
   const overdue = reminder ? new Date(effectiveFireAt(reminder)).getTime() < Date.now() : false;
+  const kind = cardKind(doc, canvas, !!reminder);
   // Ordered by signal strength: what needs attention (reminder) first, then the
   // axes that differ from the capture default (so a normal/draft note stays quiet).
   const tags: JSX.Element[] = [];
@@ -451,13 +476,11 @@ export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }
       }}
     >
       <div className="card-top">
-        {canvas && (
-          <span className="card-kind" title="Canvas note">
-            <Icon name="pencil" />
-          </span>
-        )}
+        <span className="card-kind">{kind && <Icon name={kind} />}</span>
         <span className="card-title">{doc.title}</span>
-        <span className="card-age">{relTime(doc.updated)}</span>
+        {/* A reminder chip below already carries the time that matters; the
+            edit-recency label would just repeat gray noise beside it. */}
+        {!reminder && <span className="card-age">{relTime(doc.updated)}</span>}
         <ActionMenu
           title="Note actions"
           items={[
@@ -566,7 +589,17 @@ export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: strin
                 className={`agenda-item${e.overdue ? ' is-overdue' : ''}`}
                 key={`${e.docId}:${e.reminderIndex}`}
               >
-                <span className="agenda-dot" />
+                {/* Completing is the row's most frequent action, so it leads
+                    the row as a real 44px target instead of hiding as a dim
+                    glyph in the far corner. */}
+                <button
+                  type="button"
+                  className="agenda-complete"
+                  title="Mark done"
+                  onClick={() => void act(e, 'done')}
+                >
+                  <Icon name="check" />
+                </button>
                 <button type="button" className="agenda-main" onClick={() => onOpen(e.docId)}>
                   <span className="agenda-title">{e.title}</span>
                   <span className={`agenda-when${e.overdue ? ' overdue' : ''}`}>
@@ -576,14 +609,6 @@ export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: strin
                   </span>
                 </button>
                 <div className="agenda-actions">
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    title="Mark done"
-                    onClick={() => void act(e, 'done')}
-                  >
-                    <Icon name="check" />
-                  </button>
                   <button
                     type="button"
                     className="icon-btn"
@@ -715,36 +740,28 @@ function ReminderEditor({
     <div className="reminder-editor">
       {reminders.map((r, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: reminders have no id; index is stable within an edit session
-        <div className="reminder-row" key={i}>
-          <Icon name="bell" className="reminder-bell" />
-          <input
-            type="datetime-local"
-            aria-label="Reminder time"
-            value={isoToLocalInput(r.at)}
-            onChange={(e) => e.target.value && patch(i, { at: localInputToIso(e.target.value) })}
-          />
-          <select
-            aria-label="Repeat"
-            value={r.rrule ?? ''}
-            onChange={(e) => {
-              const rrule = e.target.value || undefined;
+        <div className="reminder-block" key={i}>
+          <div className="reminder-row">
+            <Icon name="bell" className="reminder-bell" />
+            <ReminderTimeField at={r.at} onChange={(at) => patch(i, { at })} />
+            <button
+              type="button"
+              className="icon-btn danger"
+              title="Remove reminder"
+              onClick={() => remove(i)}
+            >
+              <Icon name="x" />
+            </button>
+          </div>
+          <AxisRow
+            name="repeat"
+            steps={RRULE_PRESETS.map((p) => p.label)}
+            active={RRULE_PRESETS.find((p) => (p.rrule ?? undefined) === r.rrule)?.label ?? 'Once'}
+            onPick={(label) => {
+              const rrule = RRULE_PRESETS.find((p) => p.label === label)?.rrule ?? null;
               patch(i, rrule ? { rrule } : { rrule: undefined });
             }}
-          >
-            {RRULE_PRESETS.map((p) => (
-              <option key={p.label} value={p.rrule ?? ''}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="icon-btn danger"
-            title="Remove reminder"
-            onClick={() => remove(i)}
-          >
-            <Icon name="x" />
-          </button>
+          />
         </div>
       ))}
       <div className="reminder-presets">
@@ -759,7 +776,88 @@ function ReminderEditor({
   );
 }
 
-export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => void }) {
+/** The reminder time as a tappable human label ("Thu 10 Jul, 22:00") backed by
+ * a hidden native datetime input: showPicker() opens the platform's real
+ * picker, and where that isn't supported the raw native field takes over —
+ * a worse look but never a dead control. */
+function ReminderTimeField({ at, onChange }: { at: string; onChange: (iso: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [rawMode, setRawMode] = useState(false);
+
+  if (rawMode) {
+    return (
+      <input
+        type="datetime-local"
+        aria-label="Reminder time"
+        className="reminder-time-raw"
+        value={isoToLocalInput(at)}
+        onChange={(e) => e.target.value && onChange(localInputToIso(e.target.value))}
+      />
+    );
+  }
+
+  return (
+    <span className="reminder-time">
+      <button
+        type="button"
+        className="time-button"
+        onClick={() => {
+          const el = inputRef.current;
+          if (!el) return;
+          try {
+            el.showPicker();
+          } catch {
+            setRawMode(true);
+          }
+        }}
+      >
+        {reminderLabel(at)}
+      </button>
+      <input
+        ref={inputRef}
+        type="datetime-local"
+        className="picker-anchor"
+        tabIndex={-1}
+        aria-hidden="true"
+        value={isoToLocalInput(at)}
+        onChange={(e) => e.target.value && onChange(localInputToIso(e.target.value))}
+      />
+    </span>
+  );
+}
+
+type EditorLayout = 'contained' | 'fullscreen';
+
+/** Shows a message instead of a white screen if tldraw fails to mount. The
+ * drawing itself is never at risk — the note file holds it. */
+class CanvasErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+  render(): ReactNode {
+    if (this.state.failed)
+      return (
+        <div className="canvas-loading canvas-failed">
+          <p>The canvas couldn't open.</p>
+          <span>Your drawing is safe in the note file — close and reopen to retry.</span>
+        </div>
+      );
+    return this.props.children;
+  }
+}
+
+export function EditorPanel({
+  doc,
+  onClose,
+  closeToken = 0,
+}: {
+  doc: ServerDoc;
+  onClose: () => void;
+  /** Bumped by the app shell (e.g. a bottom-bar tab tap) to request a close;
+   * the editor auto-saves on the way out. */
+  closeToken?: number;
+}) {
   const [body, setBody] = useState(doc.body);
   const [axes, setAxes] = useState<AxisValues>({
     durability: doc.durability,
@@ -785,6 +883,18 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
   const [editorMode, setEditorMode] = useState<'rich' | 'raw'>(() =>
     localStorage.getItem('forge-editor-mode') === 'raw' ? 'raw' : 'rich',
   );
+  // Canvases live fullscreen only (a sheet can't host a drawing surface);
+  // text notes default to the quick-glance sheet and remember a manual
+  // fullscreen preference across sessions.
+  const [layout, setLayout] = useState<EditorLayout>(() => {
+    if (canvas) return 'fullscreen';
+    return localStorage.getItem('forge-layout-text') === 'fullscreen' ? 'fullscreen' : 'contained';
+  });
+  const toggleLayout = (): void => {
+    const next: EditorLayout = layout === 'contained' ? 'fullscreen' : 'contained';
+    setLayout(next);
+    localStorage.setItem('forge-layout-text', next);
+  };
   const dirty =
     body !== saved.body ||
     axes.durability !== saved.durability ||
@@ -813,16 +923,33 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
   };
 
   const maybeClose = (): void => {
-    if (dirty && !window.confirm('Discard unsaved edits?')) return;
-    // A canvas that never got a stroke saved is an empty artifact of tapping
-    // "New canvas" — closing it silently deletes it, so backing out of a new
-    // canvas leaves nothing behind (and opening a stray empty one heals it).
-    if (canvas && saved.body === emptyCanvasBody()) {
+    // A canvas with no strokes at all is an artifact of tapping "New canvas" —
+    // closing it deletes it, so backing out of a new canvas leaves nothing
+    // behind (and opening a stray empty one heals it).
+    if (canvas && body === emptyCanvasBody()) {
       void removeDoc(doc.id);
       flashNotice('Empty canvas discarded');
+      onClose();
+      return;
     }
+    // Dirty edits auto-save on the way out: the outbox + files-as-truth make
+    // a fire-and-forget save safe offline, and it retires the old
+    // "Discard unsaved edits?" gauntlet.
+    if (dirty && !busy) void save();
     onClose();
   };
+
+  // The app shell bumps closeToken when the user navigates (bottom-bar tap)
+  // while the editor is open; the editor saves and closes itself.
+  const maybeCloseRef = useRef(maybeClose);
+  maybeCloseRef.current = maybeClose;
+  const seenToken = useRef(closeToken);
+  useEffect(() => {
+    if (closeToken !== seenToken.current) {
+      seenToken.current = closeToken;
+      maybeCloseRef.current();
+    }
+  }, [closeToken]);
 
   // No confirm dialog: the note vanishes with an Undo notice, which is both
   // faster and safer than a reflexive-tap confirm (files + git keep history).
@@ -850,17 +977,31 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
       role="presentation"
     >
       <div
-        className={`editor${canvas ? ' editor-canvas' : ''}`}
+        className={`editor${canvas ? ' editor-canvas' : ''}${layout === 'fullscreen' ? ' editor-fullscreen' : ''}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
       >
+        {!canvas && (
+          <div className="editor-head">
+            <button
+              type="button"
+              className="icon-btn"
+              title={layout === 'contained' ? 'Fullscreen' : 'Exit fullscreen'}
+              onClick={toggleLayout}
+            >
+              <Icon name={layout === 'contained' ? 'maximize' : 'minimize'} />
+            </button>
+          </div>
+        )}
         {showHistory ? (
           <HistoryPanel docId={doc.id} onPick={setBody} onClose={() => setShowHistory(false)} />
         ) : canvas ? (
-          <Suspense fallback={<div className="canvas-surface" />}>
-            <LazyCanvasEditor value={body} onChange={setBody} />
-          </Suspense>
+          <CanvasErrorBoundary>
+            <Suspense fallback={<div className="canvas-loading">Opening canvas…</div>}>
+              <LazyCanvasEditor value={body} onChange={setBody} />
+            </Suspense>
+          </CanvasErrorBoundary>
         ) : (
           <NoteEditor
             key={editorMode}
@@ -896,6 +1037,11 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
                   ]
                 : []),
               {
+                icon: 'archive' as IconName,
+                label: doc.archived ? 'Unarchive' : 'Archive',
+                onPick: () => void toggleArchive(),
+              },
+              {
                 icon: 'history' as IconName,
                 label: showHistory ? 'Hide history' : 'Version history',
                 onPick: () => setShowHistory((h) => !h),
@@ -908,10 +1054,6 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
               },
             ]}
           />
-          <button type="button" className="ghost" onClick={() => void toggleArchive()}>
-            <Icon name="archive" />
-            {doc.archived ? 'Unarchive' : 'Archive'}
-          </button>
           <span className="spacer" />
           <button type="button" className="ghost" onClick={maybeClose}>
             Close
@@ -923,7 +1065,7 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
             onClick={() => void save()}
           >
             <Icon name="check" />
-            Save
+            {busy ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
