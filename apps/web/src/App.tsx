@@ -104,7 +104,6 @@ export default function App() {
           Data Forge
         </h1>
         <div className="topbar-right">
-          {snap.notice && <span className="notice">{snap.notice}</span>}
           {snap.pending > 0 && <span className="pending">{snap.pending} pending</span>}
           <span
             className={`sync-dot${snap.connected ? ' on' : ''}`}
@@ -147,7 +146,7 @@ export default function App() {
             id="search"
             className="search"
             type="search"
-            placeholder="Search everything…  ( / )"
+            placeholder={isMobile ? 'Search everything…' : 'Search everything…  ( / )'}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -206,6 +205,16 @@ export default function App() {
         />
       )}
       {openDoc && <EditorPanel key={openDoc.id} doc={openDoc} onClose={() => setOpenDoc(null)} />}
+      {snap.notice && (
+        <div className="toast" role="status">
+          <span className="toast-text">{snap.notice.text}</span>
+          {snap.notice.action && (
+            <button type="button" className="toast-action" onClick={snap.notice.action.run}>
+              {snap.notice.action.label}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

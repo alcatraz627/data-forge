@@ -29,18 +29,24 @@ import { db, getCursor, outboxStore, setCursor } from './db';
  * not the other way around.
  */
 
+/** A transient status message; `action` (e.g. Undo) renders as a button. */
+export interface Notice {
+  text: string;
+  action?: { label: string; run: () => void };
+}
+
 export interface Snapshot {
   docs: ServerDoc[];
   connected: boolean;
   pending: number;
-  notice: string | null;
+  notice: Notice | null;
   loaded: boolean;
 }
 
 const byId = new Map<string, ServerDoc>();
 let connected = false;
 let pending = 0;
-let notice: string | null = null;
+let notice: Notice | null = null;
 let loaded = false;
 let snapshot: Snapshot = { docs: [], connected, pending, notice, loaded };
 const listeners = new Set<() => void>();
@@ -64,13 +70,25 @@ export function useForge(): Snapshot {
   );
 }
 
-export function flashNotice(text: string): void {
-  notice = text;
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+
+export function flashNotice(text: string, action?: Notice['action']): void {
+  notice = { text, action };
   rebuild();
-  setTimeout(() => {
-    notice = null;
-    rebuild();
-  }, 5000);
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(
+    () => {
+      notice = null;
+      rebuild();
+    },
+    action ? UNDO_WINDOW_MS : 5000,
+  );
+}
+
+export function clearNotice(): void {
+  clearTimeout(noticeTimer);
+  notice = null;
+  rebuild();
 }
 
 async function refreshPending(): Promise<void> {
@@ -299,6 +317,48 @@ export async function removeDoc(id: string): Promise<void> {
   await refreshPending();
   rebuild();
   void drainThenPull();
+}
+
+/** How long a delete stays local-only, undoable from its toast. The toast and
+ * the grace timer share this so Undo can never outlive the actual window. */
+const UNDO_WINDOW_MS = 8000;
+
+const pendingDeletes = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Deletes with a grace window instead of a confirm dialog: the note vanishes
+ * immediately, but the delete is only enqueued after the Undo notice expires.
+ * Undo within the window restores the note untouched — nothing was sent yet.
+ * If the app dies mid-window the delete was never enqueued, so the note
+ * reappears on next sync: fail-safe in the keep-the-data direction. */
+export async function removeDocUndoable(id: string): Promise<void> {
+  const doc = byId.get(id);
+  if (!doc) return;
+  byId.delete(id);
+  await db.docs.delete(id);
+  rebuild();
+  const timer = setTimeout(() => {
+    pendingDeletes.delete(id);
+    void (async () => {
+      await enqueueDelete(outboxStore, id);
+      await refreshPending();
+      rebuild();
+      void drainThenPull();
+    })();
+  }, UNDO_WINDOW_MS);
+  pendingDeletes.set(id, timer);
+  flashNotice('Note deleted', {
+    label: 'Undo',
+    run: () => {
+      const t = pendingDeletes.get(id);
+      if (!t) return;
+      clearTimeout(t);
+      pendingDeletes.delete(id);
+      void putLocal(doc).then(() => {
+        clearNotice();
+        rebuild();
+      });
+    },
+  });
 }
 
 /** Instant local filter over the fully-synced corpus. Server FTS exists for

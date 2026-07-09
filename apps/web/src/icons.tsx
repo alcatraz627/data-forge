@@ -105,6 +105,15 @@ const PATHS: Record<string, JSX.Element> = {
       <path d="m22 6-3-3" />
     </>
   ),
+  more: (
+    <>
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </>
+  ),
+  pin: <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />,
+  chevron: <polyline points="6 9 12 15 18 9" />,
 };
 
 export type IconName = keyof typeof PATHS;

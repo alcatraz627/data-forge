@@ -96,14 +96,6 @@ body {
   min-width: 0;
 }
 
-.notice {
-  color: var(--dim);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .pending {
   color: var(--accent);
   font-size: var(--text-sm);
@@ -162,8 +154,12 @@ button.primary:hover {
   background: color-mix(in srgb, var(--accent) 88%, white);
 }
 
+/* Disabled reads as inert surface, not as a washed-out live button — the
+   difference between "nothing to save" and "save is broken". */
 button.primary:disabled {
-  opacity: 0.45;
+  background: var(--surface-2);
+  color: var(--faint);
+  border-color: var(--border);
   cursor: default;
 }
 
@@ -300,21 +296,16 @@ button.danger:hover {
   box-shadow: var(--shadow-1);
 }
 
-/* Importance row: the active segment carries the hot/cool importance colour. */
-.axis-row[data-axis="importance"] .chip-active {
-  color: var(--on-accent);
-}
-.axis-row[data-axis="importance"] .chip-active[data-value="low"] {
-  background: var(--imp-low);
-}
-.axis-row[data-axis="importance"] .chip-active[data-value="normal"] {
-  background: var(--faint);
-}
+/* Importance row: every selected pill keeps the same neutral shape as the
+   other axes (a differently-styled pill reads as a glitch, not a meaning);
+   only high and critical spend colour. */
 .axis-row[data-axis="importance"] .chip-active[data-value="high"] {
   background: var(--imp-high);
+  color: var(--on-accent);
 }
 .axis-row[data-axis="importance"] .chip-active[data-value="critical"] {
   background: var(--imp-critical);
+  color: var(--on-accent);
 }
 
 /* ── Search ────────────────────────────────────────────────────────── */
@@ -415,12 +406,18 @@ button.danger:hover {
   gap: var(--space-2);
   width: 100%;
   text-align: left;
+  cursor: pointer;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-3) var(--space-4);
   transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease), transform 0.06s
     var(--ease);
+}
+
+.card:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
 }
 
 .card:hover {
@@ -448,10 +445,40 @@ button.danger:hover {
   display: flex;
   justify-content: space-between;
   gap: var(--space-3);
-  align-items: baseline;
+  align-items: center;
+}
+
+.card-kind {
+  color: var(--dim);
+  flex: none;
+  display: inline-flex;
+}
+
+/* The per-card quick-action trigger: compact so cards stay tight, and on
+   pointer devices revealed on hover/focus so the list reads calm. Touch
+   screens keep it always visible — there is no hover to discover it with. */
+.card .menu-wrap .icon-btn {
+  min-height: 32px;
+  min-width: 32px;
+  padding: var(--space-1);
+  margin-block: -4px;
+}
+
+@media (hover: hover) {
+  .card .menu-wrap .icon-btn {
+    opacity: 0;
+    transition: opacity 0.12s var(--ease);
+  }
+
+  .card:hover .menu-wrap .icon-btn,
+  .card:focus-within .menu-wrap .icon-btn,
+  .card .menu-wrap .icon-btn[aria-expanded="true"] {
+    opacity: 1;
+  }
 }
 
 .card-title {
+  flex: 1;
   font-family: var(--font-read);
   font-size: var(--text-lg);
   font-weight: 600;
@@ -533,8 +560,55 @@ button.danger:hover {
   color: var(--danger);
 }
 
-.tag[data-kind="canvas"] {
-  color: var(--dim);
+/* ── Action menus ──────────────────────────────────────────────────── */
+.menu-wrap {
+  position: relative;
+  flex: none;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 190px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-1);
+  display: grid;
+  z-index: 50;
+  animation: pop 0.12s var(--ease);
+}
+
+.menu-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+  right: auto;
+  left: 0;
+}
+
+.menu-item {
+  justify-content: flex-start;
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  padding: var(--space-2) var(--space-3);
+  width: 100%;
+  text-align: left;
+  font-size: var(--text-sm);
+}
+
+.menu-item:hover {
+  background: var(--surface-2);
+}
+
+.menu-item.danger {
+  color: var(--danger);
+}
+
+.menu-item.danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
 /* ── Empty state ───────────────────────────────────────────────────── */
@@ -673,12 +747,63 @@ button.danger:hover {
   border-top: 1px solid var(--border);
 }
 
-.editor-section > .section-label {
+.section-label {
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.6px;
   font-weight: 700;
   color: var(--faint);
+}
+
+/* ── Axis disclosure (collapsed summary ↔ full picker) ─────────────── */
+.axis-disclosure {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.axis-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: var(--space-1) 0;
+}
+
+.axis-summary:hover .axis-current {
+  color: var(--text);
+}
+
+.axis-summary .axis-current {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dim);
+  font-size: var(--text-sm);
+  transition: color 0.15s var(--ease);
+}
+
+.axis-current [data-kind="importance"][data-value="high"] {
+  color: var(--imp-high);
+  font-weight: 600;
+}
+
+.axis-current [data-kind="importance"][data-value="critical"] {
+  color: var(--imp-critical);
+  font-weight: 600;
+}
+
+.axis-summary > .icon {
+  color: var(--faint);
+  transition: transform 0.15s var(--ease);
+}
+
+.axis-summary > .icon.flip {
+  transform: rotate(180deg);
 }
 
 .rich-editor .ProseMirror {
@@ -839,11 +964,39 @@ button.ghost.active {
   min-width: 160px;
 }
 
-.add-reminder {
-  justify-self: start;
+.reminder-row .reminder-bell {
   color: var(--accent);
-  border-style: dashed;
+  flex: none;
+}
+
+/* One-tap starting points; a tapped preset becomes a full row above, where
+   the time and recurrence stay editable. */
+.reminder-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.preset-label {
+  font-size: var(--text-sm);
+  color: var(--faint);
+  margin-right: var(--space-1);
+}
+
+.preset-chip {
+  min-height: 34px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
   background: transparent;
+  border: 1px dashed var(--border-strong);
+  color: var(--accent);
+  font-size: var(--text-sm);
+}
+
+.preset-chip:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-style: solid;
 }
 
 .helper {
@@ -875,6 +1028,20 @@ button.ghost.active {
 
 .agenda-heading.overdue {
   color: var(--danger);
+}
+
+.agenda-heading .agenda-date {
+  color: var(--faint);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.agenda-hint {
+  color: var(--faint);
+  font-size: var(--text-sm);
+  margin: 0;
+  padding: var(--space-1) 2px;
 }
 
 .agenda-item {
@@ -1001,6 +1168,48 @@ button.ghost.active {
 
 .spacer {
   flex: 1;
+}
+
+/* ── Toast (transient status + undo) ───────────────────────────────── */
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: min(92vw, 480px);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: var(--space-2) var(--space-4);
+  box-shadow: var(--shadow-2);
+  z-index: 60;
+  animation: pop 0.18s var(--ease);
+}
+
+.toast-text {
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast-action {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+  flex: none;
+}
+
+/* Clear the bottom tab bar on phones. */
+.app-mobile .toast {
+  bottom: calc(76px + env(safe-area-inset-bottom));
 }
 
 /* ── Motion ────────────────────────────────────────────────────────── */

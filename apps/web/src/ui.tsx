@@ -13,6 +13,7 @@ import {
   type ViewDef,
   buildAgenda,
   effectiveFireAt,
+  emptyCanvasBody,
   isCanvas,
   nowIso,
 } from '@forge/core';
@@ -20,7 +21,14 @@ import { type JSX, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import * as api from './api';
 import { NoteEditor } from './editor/NoteEditor';
 import { Icon, type IconName } from './icons';
-import { actOnReminder, captureNote, flashNotice, removeDoc, saveDoc } from './store';
+import {
+  actOnReminder,
+  captureNote,
+  flashNotice,
+  removeDoc,
+  removeDocUndoable,
+  saveDoc,
+} from './store';
 
 const LazyCanvasEditor = lazy(() => import('./editor/CanvasEditor'));
 
@@ -131,6 +139,78 @@ export interface AxisValues {
   importance: Importance;
 }
 
+interface MenuItem {
+  icon: IconName;
+  label: string;
+  danger?: boolean;
+  onPick: () => void;
+}
+
+/** A small anchored menu behind one trigger. Rare and destructive actions
+ * live here: one deliberate tap to open, labeled full-word items to pick, so
+ * surfaces stay uncluttered without hiding what's possible. */
+function ActionMenu({
+  title,
+  items,
+  up = false,
+}: {
+  title: string;
+  items: MenuItem[];
+  up?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent): void => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [open]);
+
+  return (
+    <div className="menu-wrap" ref={ref}>
+      <button
+        type="button"
+        className={`icon-btn${open ? ' active' : ''}`}
+        title={title}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <Icon name="more" />
+      </button>
+      {open && (
+        <div className={`menu${up ? ' menu-up' : ''}`} role="menu">
+          {items.map((it) => (
+            <button
+              key={it.label}
+              type="button"
+              role="menuitem"
+              className={`menu-item${it.danger ? ' danger' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                it.onPick();
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <Icon name={it.icon} />
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function relTime(iso: string): string {
   const t = new Date(iso).getTime();
   const s = (Date.now() - t) / 1000;
@@ -204,6 +284,39 @@ export function AxisPicker({
   );
 }
 
+/** The axes folded down to their current values. Capture and editing stay
+ * zero-decision (CAPTURE_DEFAULTS do the right thing); the full segmented
+ * picker appears only when the user deliberately reaches for it. */
+export function AxisDisclosure({
+  value,
+  onChange,
+}: {
+  value: AxisValues;
+  onChange: (v: AxisValues) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="axis-disclosure">
+      <button
+        type="button"
+        className="axis-summary"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="section-label">Axes</span>
+        <span className="axis-current">
+          {value.durability} · {value.formality} ·{' '}
+          <span data-kind="importance" data-value={value.importance}>
+            {value.importance}
+          </span>
+        </span>
+        <Icon name="chevron" className={open ? 'flip' : undefined} />
+      </button>
+      {open && <AxisPicker value={value} onChange={onChange} />}
+    </div>
+  );
+}
+
 /** The drop-a-thought box. Drafts persist across reloads so a half-typed
  * thought is never lost to a stray tab close. */
 export function Capture({ onSaved }: { onSaved?: () => void }) {
@@ -211,6 +324,7 @@ export function Capture({ onSaved }: { onSaved?: () => void }) {
   const [axes, setAxes] = useState<AxisValues>({ ...CAPTURE_DEFAULTS });
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const mobile = useIsMobile();
 
   useEffect(() => {
     if (text) localStorage.setItem('forge-draft', text);
@@ -243,7 +357,7 @@ export function Capture({ onSaved }: { onSaved?: () => void }) {
       <textarea
         id="capture"
         ref={ref}
-        placeholder="Drop a thought… (⌘↵ to save)"
+        placeholder={mobile ? 'Drop a thought…' : 'Drop a thought… (⌘↵ to save)'}
         rows={3}
         autoFocus
         value={text}
@@ -252,7 +366,7 @@ export function Capture({ onSaved }: { onSaved?: () => void }) {
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void save();
         }}
       />
-      <AxisPicker value={axes} onChange={setAxes} />
+      <AxisDisclosure value={axes} onChange={setAxes} />
       <div className="capture-actions">
         <button
           type="button"
@@ -287,28 +401,24 @@ export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }
         {doc.importance}
       </span>,
     );
-  if (doc.durability !== CAPTURE_DEFAULTS.durability)
+  // A canvas's working/draft axes are its own creation defaults, not a signal
+  // the user chose — chips would repeat on every canvas card and say nothing.
+  if (!canvas && doc.durability !== CAPTURE_DEFAULTS.durability)
     tags.push(
       <span key="dur" className="tag">
         {doc.durability}
       </span>,
     );
-  if (doc.formality !== CAPTURE_DEFAULTS.formality)
+  if (!canvas && doc.formality !== CAPTURE_DEFAULTS.formality)
     tags.push(
       <span key="form" className="tag">
         {doc.formality}
       </span>,
     );
-  if (canvas)
-    tags.push(
-      <span key="canvas" className="tag" data-kind="canvas">
-        <Icon name="pencil" />
-        canvas
-      </span>,
-    );
   if (doc.pinned)
     tags.push(
       <span key="pin" className="tag">
+        <Icon name="pin" />
         pinned
       </span>,
     );
@@ -324,15 +434,60 @@ export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }
         unsynced
       </span>,
     );
+  // A div with button semantics, not a <button>: the quick-action menu nests
+  // its own buttons inside, which HTML forbids inside a real button element.
   return (
-    <button type="button" className="card" data-importance={doc.importance} onClick={onOpen}>
+    <div
+      className="card"
+      data-importance={doc.importance}
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+    >
       <div className="card-top">
+        {canvas && (
+          <span className="card-kind" title="Canvas note">
+            <Icon name="pencil" />
+          </span>
+        )}
         <span className="card-title">{doc.title}</span>
         <span className="card-age">{relTime(doc.updated)}</span>
+        <ActionMenu
+          title="Note actions"
+          items={[
+            {
+              icon: 'pin',
+              label: doc.pinned ? 'Unpin' : 'Pin to top',
+              onPick: () => void saveDoc(doc.id, doc.rev, { pinned: !doc.pinned }),
+            },
+            {
+              icon: 'archive',
+              label: doc.archived ? 'Unarchive' : 'Archive',
+              onPick: () => {
+                void saveDoc(doc.id, doc.rev, { archived: !doc.archived });
+                flashNotice(
+                  doc.archived ? 'Note restored' : 'Archived — it lives on in the Archive view',
+                );
+              },
+            },
+            {
+              icon: 'trash',
+              label: 'Delete',
+              danger: true,
+              onPick: () => void removeDocUndoable(doc.id),
+            },
+          ]}
+        />
       </div>
       {doc.preview && <div className="card-preview">{doc.preview}</div>}
       {tags.length > 0 && <div className="card-tags">{tags}</div>}
-    </button>
+    </div>
   );
 }
 
@@ -341,10 +496,40 @@ export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }
  * Tasks replacement surface. */
 export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: string) => void }) {
   const [, force] = useState(0);
-  const entries = buildAgenda(docs, new Date());
-  const groups: Array<[string, AgendaEntry[]]> = [
-    ['Overdue', entries.filter((e) => e.overdue)],
-    ['Upcoming', entries.filter((e) => !e.overdue)],
+  const now = new Date();
+  const entries = buildAgenda(docs, now);
+
+  // Day scaffolding: the agenda reads as a schedule (today, tomorrow, later),
+  // not one undifferentiated queue. Today renders even when empty so the day
+  // always has a visible shape.
+  const dayStart = (d: Date): number => {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x.getTime();
+  };
+  const today = dayStart(now);
+  const dayOf = (iso: string): number => dayStart(new Date(iso));
+  const dateLabel = (offsetDays: number): string =>
+    new Date(today + offsetDays * 86_400_000).toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+  const upcoming = entries.filter((e) => !e.overdue);
+  const groups: Array<{ name: string; detail?: string; list: AgendaEntry[]; hint?: string }> = [
+    { name: 'Overdue', list: entries.filter((e) => e.overdue) },
+    {
+      name: 'Today',
+      detail: dateLabel(0),
+      list: upcoming.filter((e) => dayOf(e.at) === today),
+      hint: 'Nothing more today',
+    },
+    {
+      name: 'Tomorrow',
+      detail: dateLabel(1),
+      list: upcoming.filter((e) => dayOf(e.at) === today + 86_400_000),
+    },
+    { name: 'Later', list: upcoming.filter((e) => dayOf(e.at) > today + 86_400_000) },
   ];
 
   const act = async (
@@ -368,10 +553,14 @@ export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: strin
 
   return (
     <div className="agenda">
-      {groups.map(([name, list]) =>
-        list.length === 0 ? null : (
+      {groups.map(({ name, detail, list, hint }) =>
+        list.length === 0 && !hint ? null : (
           <div className="agenda-group" key={name}>
-            <h2 className={`agenda-heading${name === 'Overdue' ? ' overdue' : ''}`}>{name}</h2>
+            <h2 className={`agenda-heading${name === 'Overdue' ? ' overdue' : ''}`}>
+              {name}
+              {detail && <span className="agenda-date"> · {detail}</span>}
+            </h2>
+            {list.length === 0 && hint && <p className="agenda-hint">{hint}</p>}
             {list.map((e) => (
               <div
                 className={`agenda-item${e.overdue ? ' is-overdue' : ''}`}
@@ -481,8 +670,34 @@ function HistoryPanel({
   );
 }
 
-/** Add, retime, or remove reminders on the note being edited. Recurrence is a
- * small set of presets; a bare datetime covers the one-shot case. */
+/** Natural starting points for a new reminder, so the common cases are one
+ * tap instead of a date-picker session. Times are relative to `now`. */
+function reminderPresets(now: Date): Array<{ label: string; at: Date }> {
+  const at = (base: Date, h: number): Date => {
+    const x = new Date(base);
+    x.setHours(h, 0, 0, 0);
+    return x;
+  };
+  const tomorrow = new Date(now.getTime() + 86_400_000);
+  const tonight = at(now, 20);
+  const monday = new Date(now);
+  monday.setDate(monday.getDate() + ((8 - monday.getDay()) % 7 || 7));
+  return [
+    { label: 'In an hour', at: new Date(now.getTime() + 3_600_000) },
+    // Under ten minutes to 8pm counts as "missed it" — offer tomorrow's.
+    {
+      label: 'Tonight 8pm',
+      at: tonight.getTime() > now.getTime() + 600_000 ? tonight : at(tomorrow, 20),
+    },
+    { label: 'Tomorrow 9am', at: at(tomorrow, 9) },
+    { label: 'Monday 9am', at: at(monday, 9) },
+  ];
+}
+
+/** Add, retime, or remove reminders on the note being edited. Presets cover
+ * the common cases in one tap; the datetime field handles everything else.
+ * Times are stored with the local offset (nowIso), never as UTC-Z — recurrence
+ * expands on wall-clock time (review H4). */
 function ReminderEditor({
   reminders,
   onChange,
@@ -490,11 +705,8 @@ function ReminderEditor({
   reminders: Reminder[];
   onChange: (r: Reminder[]) => void;
 }) {
-  const add = (): void => {
-    const at = new Date(Date.now() + 3_600_000);
-    at.setMinutes(0, 0, 0);
-    onChange([...reminders, { at: at.toISOString(), status: 'active' }]);
-  };
+  const add = (atDate: Date): void =>
+    onChange([...reminders, { at: nowIso(atDate), status: 'active' }]);
   const patch = (i: number, next: Partial<Reminder>): void =>
     onChange(reminders.map((r, j) => (j === i ? { ...r, ...next } : r)));
   const remove = (i: number): void => onChange(reminders.filter((_, j) => j !== i));
@@ -504,12 +716,15 @@ function ReminderEditor({
       {reminders.map((r, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: reminders have no id; index is stable within an edit session
         <div className="reminder-row" key={i}>
+          <Icon name="bell" className="reminder-bell" />
           <input
             type="datetime-local"
+            aria-label="Reminder time"
             value={isoToLocalInput(r.at)}
             onChange={(e) => e.target.value && patch(i, { at: localInputToIso(e.target.value) })}
           />
           <select
+            aria-label="Repeat"
             value={r.rrule ?? ''}
             onChange={(e) => {
               const rrule = e.target.value || undefined;
@@ -522,14 +737,24 @@ function ReminderEditor({
               </option>
             ))}
           </select>
-          <button type="button" className="ghost danger" onClick={() => remove(i)}>
-            ✕
+          <button
+            type="button"
+            className="icon-btn danger"
+            title="Remove reminder"
+            onClick={() => remove(i)}
+          >
+            <Icon name="x" />
           </button>
         </div>
       ))}
-      <button type="button" className="ghost add-reminder" onClick={add}>
-        + reminder
-      </button>
+      <div className="reminder-presets">
+        <span className="preset-label">Remind me</span>
+        {reminderPresets(new Date()).map((p) => (
+          <button key={p.label} type="button" className="preset-chip" onClick={() => add(p.at)}>
+            {p.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -589,12 +814,20 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
 
   const maybeClose = (): void => {
     if (dirty && !window.confirm('Discard unsaved edits?')) return;
+    // A canvas that never got a stroke saved is an empty artifact of tapping
+    // "New canvas" — closing it silently deletes it, so backing out of a new
+    // canvas leaves nothing behind (and opening a stray empty one heals it).
+    if (canvas && saved.body === emptyCanvasBody()) {
+      void removeDoc(doc.id);
+      flashNotice('Empty canvas discarded');
+    }
     onClose();
   };
 
-  const del = async (): Promise<void> => {
-    if (!window.confirm('Delete this note?')) return;
-    await removeDoc(doc.id);
+  // No confirm dialog: the note vanishes with an Undo notice, which is both
+  // faster and safer than a reflexive-tap confirm (files + git keep history).
+  const del = (): void => {
+    void removeDocUndoable(doc.id);
     onClose();
   };
 
@@ -602,6 +835,7 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
   // closes rather than waiting for Save.
   const toggleArchive = async (): Promise<void> => {
     await saveDoc(doc.id, baseRev, { archived: !doc.archived });
+    flashNotice(doc.archived ? 'Note restored' : 'Archived — it lives on in the Archive view');
     onClose();
   };
 
@@ -638,8 +872,7 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
         )}
         {!canvas && (
           <div className="editor-section">
-            <span className="section-label">Axes</span>
-            <AxisPicker value={axes} onChange={setAxes} />
+            <AxisDisclosure value={axes} onChange={setAxes} />
           </div>
         )}
         {!canvas && (
@@ -649,39 +882,35 @@ export function EditorPanel({ doc, onClose }: { doc: ServerDoc; onClose: () => v
           </div>
         )}
         <div className="editor-actions">
-          <button
-            type="button"
-            className="icon-btn danger"
-            title="Delete note"
-            onClick={() => void del()}
-          >
-            <Icon name="trash" />
-          </button>
-          {!canvas && (
-            <button
-              type="button"
-              className="icon-btn"
-              title={editorMode === 'rich' ? 'Switch to raw markdown' : 'Switch to rich text'}
-              onClick={toggleMode}
-            >
-              <Icon name={editorMode === 'rich' ? 'code' : 'pencil'} />
-            </button>
-          )}
-          <button
-            type="button"
-            className="icon-btn"
-            title={doc.archived ? 'Unarchive' : 'Archive'}
-            onClick={() => void toggleArchive()}
-          >
+          <ActionMenu
+            up
+            title="More actions"
+            items={[
+              ...(!canvas
+                ? [
+                    {
+                      icon: (editorMode === 'rich' ? 'code' : 'pencil') as IconName,
+                      label: editorMode === 'rich' ? 'Raw markdown' : 'Rich text',
+                      onPick: toggleMode,
+                    },
+                  ]
+                : []),
+              {
+                icon: 'history' as IconName,
+                label: showHistory ? 'Hide history' : 'Version history',
+                onPick: () => setShowHistory((h) => !h),
+              },
+              {
+                icon: 'trash' as IconName,
+                label: 'Delete note',
+                danger: true,
+                onPick: del,
+              },
+            ]}
+          />
+          <button type="button" className="ghost" onClick={() => void toggleArchive()}>
             <Icon name="archive" />
-          </button>
-          <button
-            type="button"
-            className={`icon-btn${showHistory ? ' active' : ''}`}
-            title="Version history"
-            onClick={() => setShowHistory((h) => !h)}
-          >
-            <Icon name="history" />
+            {doc.archived ? 'Unarchive' : 'Archive'}
           </button>
           <span className="spacer" />
           <button type="button" className="ghost" onClick={maybeClose}>
