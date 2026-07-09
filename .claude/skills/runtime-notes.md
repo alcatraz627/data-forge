@@ -1,3 +1,39 @@
+## session: M6b interaction pass [forge-ux-7e] — 2026-07-09
+
+Purpose: user verdict on M6 was "technically great but lacking in usability
+appeal" — meaning interaction cost, not colors. Audit → fix pass: card quick
+actions, folded axes, reminder presets, undoable delete, canvas-cancel fix.
+
+Insights:
+- "Usability appeal" meant interaction cost (clicks-per-action, cancel that
+  still creates an item, rookie reminder controls), NOT aesthetics. I offered
+  taste options and got corrected (atone literal-request-over-intent #2).
+  Expand a complaint's own noun into concrete costs before offering options.
+- REAL bug found only by driving the built app against a real server: bodyOf
+  read bodies from docs_fts, which stores '' for canvases (L4), so the sync
+  feed + GET served every canvas with an empty body. Green unit tests missed
+  it; no test asserted a canvas body over the wire. Fixed: bodies come from
+  files (ADR-0001); FTS is only the mangled-file fallback. Test added.
+- Stored titles/previews are derived-at-write: rows written before deriveTitle
+  learned the canvas marker keep the raw marker forever. Boot re-derive
+  (kv-stamped DERIVE_VERSION) heals them AND bumps seq — which doubles as the
+  body-heal vector, since clients re-pull the whole doc.
+- Undo-toast delete: enqueue the delete only after the 8s grace window; undo
+  cancels before anything is sent. App death mid-window = note survives
+  (fail-safe toward keeping data). No confirm dialog needed.
+- captureCanvas created+synced the note on tap ("New canvas" then cancel
+  littered empty canvases — the user's exact complaint). Discard-on-close of
+  a never-drawn canvas fixes cancel AND self-heals existing strays on open.
+- Chrome-devtools MCP roundtrips outrun short UI windows (toast expired before
+  my Undo click landed). Verify time-windowed flows with ONE in-page async
+  evaluate (click → await → assert), not separate tool calls.
+- Nested-button trap: a card that hosts its own action menu cannot be a
+  <button> (HTML forbids nesting); div + role=button + keyDown guard
+  (e.target === e.currentTarget) keeps keyboard behavior.
+- make deploy to the live :5040 launchd server is classifier-gated in auto
+  mode — deploy needs the user present.
+
+---
 ## session: M6 UI lift [forge-plan-d4] — 2026-07-08
 
 Purpose: full visual redesign of the web app (user: "the UI still needs a big
