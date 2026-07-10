@@ -115,6 +115,19 @@ const PATHS: Record<string, JSX.Element> = {
   pin: <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />,
   chevron: <polyline points="6 9 12 15 18 9" />,
   zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
+  sliders: (
+    <>
+      <line x1="4" y1="21" x2="4" y2="14" />
+      <line x1="4" y1="10" x2="4" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12" y2="3" />
+      <line x1="20" y1="21" x2="20" y2="16" />
+      <line x1="20" y1="12" x2="20" y2="3" />
+      <line x1="1" y1="14" x2="7" y2="14" />
+      <line x1="9" y1="8" x2="15" y2="8" />
+      <line x1="17" y1="16" x2="23" y2="16" />
+    </>
+  ),
   maximize: (
     <>
       <polyline points="15 3 21 3 21 9" />

@@ -20,6 +20,22 @@ const scaleVars = (group, unit = '') =>
     .map(([k, v]) => `  --${group}-${k}: ${v}${unit};`)
     .join('\n');
 
+// Palette overrides: partial token sets applied via [data-palette] — the app
+// resolves the active theme first, then stamps the matching palette name, so
+// a flat attribute selector is sufficient.
+const paletteVars = (vals) =>
+  Object.entries(vals)
+    .map(([k, v]) => `  --${k}: ${v};`)
+    .join('\n');
+
+const paletteBlocks = ['dark', 'light']
+  .flatMap((scope) =>
+    Object.entries(tokens.palettes?.[scope] ?? {}).map(
+      ([name, vals]) => `:root[data-palette='${name}'] {\n${paletteVars(vals)}\n}`,
+    ),
+  )
+  .join('\n');
+
 const css = `/* GENERATED from tokens.json — do not edit by hand. Regenerate: make tokens */
 :root {
 ${colorVars('dark')}
@@ -38,6 +54,7 @@ ${colorVars('light')}
 ${colorVars('light')}
   }
 }
+${paletteBlocks}
 `;
 
 // Android: Compose/Glance Color constants. Hex like #131110 becomes the

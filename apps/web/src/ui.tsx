@@ -85,7 +85,9 @@ export function Readout({
     return () => clearInterval(t);
   }, []);
   return (
-    <button type="button" className="readout" title="Settings" onClick={onOpenSettings}>
+    // The whole strip still opens Settings, but a visible sliders control
+    // anchors it — a hidden door is clever exactly once, then it's a wall.
+    <div className="readout" onClick={onOpenSettings} role="presentation">
       <span className="readout-brand">
         <span className="cursor-mark">▮</span> DATA FORGE
       </span>
@@ -98,15 +100,85 @@ export function Readout({
             : '○ OFFLINE'}
       </span>
       <span className="readout-clock">{clock}</span>
-    </button>
+      <button
+        type="button"
+        className="icon-btn readout-settings"
+        title="Settings"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenSettings();
+        }}
+      >
+        <Icon name="sliders" />
+      </button>
+    </div>
   );
 }
 
-/** Settings sheet — reached only through the readout. Square controls, mono
- * group rules, the same segmented control language as the axes. */
+/** Swatch metadata for the palette pickers (display only — the real values
+ * live in tokens.json and apply via [data-palette]). PROVISIONAL hexes until
+ * the Theme Lab verbatim sync replaces them. */
+const DARK_PALETTES = [
+  { id: 'deep-ocean', name: 'Deep Ocean', bg: '#0D1520', accent: '#4FB4FF' },
+  { id: 'slate-teal', name: 'Slate Teal', bg: '#0F1917', accent: '#45C4B0' },
+  { id: 'void', name: 'Void', bg: '#000000', accent: '#5EA8FF' },
+  { id: 'moss', name: 'Moss', bg: '#101510', accent: '#A8C36B' },
+  { id: 'nightshade', name: 'Nightshade', bg: '#120E1C', accent: '#B99CFF' },
+  { id: 'carbon', name: 'Carbon', bg: '#101113', accent: '#D9DCE1' },
+] as const;
+
+const LIGHT_PALETTES = [
+  { id: 'mist', name: 'Mist', bg: '#EFF3F7', accent: '#1D66C4' },
+  { id: 'sage', name: 'Sage', bg: '#EEF2EC', accent: '#2B7A6F' },
+  { id: 'pure', name: 'Pure', bg: '#FFFFFF', accent: '#1D66C4' },
+  { id: 'parchment', name: 'Parchment', bg: '#F6F0E3', accent: '#8A5A2B' },
+  { id: 'rose-ash', name: 'Rose Ash', bg: '#F3EDEF', accent: '#A64D69' },
+  { id: 'solar', name: 'Solar', bg: '#FBF3DF', accent: '#C05B21' },
+] as const;
+
+function SwatchRow({
+  label,
+  palettes,
+  active,
+  onPick,
+}: {
+  label: string;
+  palettes: readonly { id: string; name: string; bg: string; accent: string }[];
+  active: string;
+  onPick: (id: string) => void;
+}) {
+  return (
+    <div className="swatch-group">
+      <span className="axis-name">{label}</span>
+      <div className="swatch-row">
+        {palettes.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={`swatch${p.id === active ? ' swatch-active' : ''}`}
+            title={p.name}
+            onClick={() => onPick(p.id)}
+          >
+            <span className="swatch-chip" style={{ background: p.bg }}>
+              <span className="swatch-accent" style={{ background: p.accent }} />
+            </span>
+            <span className="swatch-name">{p.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Settings sheet — reached through the readout (and its sliders control).
+ * Square controls, mono group rules, the same segmented language as axes. */
 export function SettingsSheet({
   themeMode,
   onThemeMode,
+  paletteDark,
+  onPaletteDark,
+  paletteLight,
+  onPaletteLight,
   typeSize,
   onTypeSize,
   density,
@@ -117,6 +189,10 @@ export function SettingsSheet({
 }: {
   themeMode: 'dark' | 'light' | 'system';
   onThemeMode: (m: 'dark' | 'light' | 'system') => void;
+  paletteDark: string;
+  onPaletteDark: (id: string) => void;
+  paletteLight: string;
+  onPaletteLight: (id: string) => void;
   typeSize: 'S' | 'M' | 'L';
   onTypeSize: (s: 'S' | 'M' | 'L') => void;
   density: 'compact' | 'relaxed';
@@ -143,7 +219,18 @@ export function SettingsSheet({
           active={themeMode === 'dark' ? 'Dark' : themeMode === 'light' ? 'Light' : 'System'}
           onPick={(v) => onThemeMode(v.toLowerCase() as 'dark' | 'light' | 'system')}
         />
-        <p className="settings-note">More palettes land with the Theme Lab sync.</p>
+        <SwatchRow
+          label="dark"
+          palettes={DARK_PALETTES}
+          active={paletteDark}
+          onPick={onPaletteDark}
+        />
+        <SwatchRow
+          label="light"
+          palettes={LIGHT_PALETTES}
+          active={paletteLight}
+          onPick={onPaletteLight}
+        />
         <h2 className="section-rule">
           <span>LIST</span>
           <span className="rule-line" />

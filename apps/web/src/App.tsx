@@ -69,6 +69,29 @@ export default function App() {
   // Bumped when navigation happens under an open editor; the editor
   // auto-saves and closes itself in response.
   const [closeToken, setCloseToken] = useState(0);
+  const [paletteDark, setPaletteDark] = useState(
+    () => localStorage.getItem('forge-palette-dark') ?? 'deep-ocean',
+  );
+  const [paletteLight, setPaletteLight] = useState(
+    () => localStorage.getItem('forge-palette-light') ?? 'mist',
+  );
+
+  // Stamp the palette matching the RESOLVED theme (system mode follows the
+  // OS live); default palettes are the base tokens, so no attribute at all.
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const apply = (): void => {
+      const resolved = themeMode === 'system' ? (mq.matches ? 'light' : 'dark') : themeMode;
+      const pal = resolved === 'dark' ? paletteDark : paletteLight;
+      if (pal === 'deep-ocean' || pal === 'mist') delete document.documentElement.dataset.palette;
+      else document.documentElement.dataset.palette = pal;
+    };
+    apply();
+    mq.addEventListener('change', apply);
+    localStorage.setItem('forge-palette-dark', paletteDark);
+    localStorage.setItem('forge-palette-light', paletteLight);
+    return () => mq.removeEventListener('change', apply);
+  }, [themeMode, paletteDark, paletteLight]);
 
   useEffect(() => startSync(), []);
   useEffect(() => {
@@ -301,6 +324,10 @@ export default function App() {
         <SettingsSheet
           themeMode={themeMode}
           onThemeMode={setThemeMode}
+          paletteDark={paletteDark}
+          onPaletteDark={setPaletteDark}
+          paletteLight={paletteLight}
+          onPaletteLight={setPaletteLight}
           typeSize={typeSize}
           onTypeSize={setTypeSize}
           density={densityPref}
