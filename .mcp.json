@@ -1,5 +1,9 @@
 {
   "mcpServers": {
+    "claude-design": {
+      "type": "http",
+      "url": "https://api.anthropic.com/v1/design/mcp"
+    },
     "playwright": {
       "command": "npx",
       "args": ["-y", "@playwright/mcp@0.0.43"]

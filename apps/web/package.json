@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
     "@forge/core": "workspace:*",
     "@forge/tokens": "workspace:*",
     "@tiptap/extension-image": "^2.11.5",

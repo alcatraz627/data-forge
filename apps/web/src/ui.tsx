@@ -61,7 +61,164 @@ export function reminderLabel(at: string): string {
   });
 }
 
-export type MobileScreen = 'notes' | 'agenda' | 'search' | 'capture';
+export type MobileScreen = 'notes' | 'agenda' | 'search' | 'capture' | 'actions';
+
+export type ListDensity = 'skim' | 'list' | 'cards';
+
+/** The 44px mono statusline that replaces any app header — brand left, sync
+ * truth + clock right. It is the only place sync state lives, and tapping it
+ * opens Settings: the statusline is the door to the machine room. */
+export function Readout({
+  syncState,
+  pending,
+  onOpenSettings,
+}: {
+  syncState: 'synced' | 'pending' | 'offline';
+  pending: number;
+  onOpenSettings: () => void;
+}) {
+  const fmt = (): string =>
+    new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  const [clock, setClock] = useState(fmt);
+  useEffect(() => {
+    const t = setInterval(() => setClock(fmt()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <button type="button" className="readout" title="Settings" onClick={onOpenSettings}>
+      <span className="readout-brand">
+        <span className="cursor-mark">▮</span> DATA FORGE
+      </span>
+      <span className="spacer" />
+      <span className="readout-sync" data-state={syncState}>
+        {syncState === 'synced'
+          ? '● SYNCED'
+          : syncState === 'pending'
+            ? `◐ ${pending} PENDING`
+            : '○ OFFLINE'}
+      </span>
+      <span className="readout-clock">{clock}</span>
+    </button>
+  );
+}
+
+/** Settings sheet — reached only through the readout. Square controls, mono
+ * group rules, the same segmented control language as the axes. */
+export function SettingsSheet({
+  themeMode,
+  onThemeMode,
+  typeSize,
+  onTypeSize,
+  density,
+  onDensity,
+  pending,
+  connected,
+  onClose,
+}: {
+  themeMode: 'dark' | 'light' | 'system';
+  onThemeMode: (m: 'dark' | 'light' | 'system') => void;
+  typeSize: 'S' | 'M' | 'L';
+  onTypeSize: (s: 'S' | 'M' | 'L') => void;
+  density: 'compact' | 'relaxed';
+  onDensity: (d: 'compact' | 'relaxed') => void;
+  pending: number;
+  connected: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="editor-backdrop" onClick={onClose} role="presentation">
+      <div
+        className="editor settings-sheet"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <h2 className="section-rule">
+          <span>APPEARANCE</span>
+          <span className="rule-line" />
+        </h2>
+        <AxisRow
+          name="theme"
+          steps={['Dark', 'Light', 'System'] as const}
+          active={themeMode === 'dark' ? 'Dark' : themeMode === 'light' ? 'Light' : 'System'}
+          onPick={(v) => onThemeMode(v.toLowerCase() as 'dark' | 'light' | 'system')}
+        />
+        <p className="settings-note">More palettes land with the Theme Lab sync.</p>
+        <h2 className="section-rule">
+          <span>LIST</span>
+          <span className="rule-line" />
+        </h2>
+        <AxisRow
+          name="density"
+          steps={['Compact', 'Relaxed'] as const}
+          active={density === 'compact' ? 'Compact' : 'Relaxed'}
+          onPick={(v) => onDensity(v.toLowerCase() as 'compact' | 'relaxed')}
+        />
+        <AxisRow name="type size" steps={['S', 'M', 'L'] as const} active={typeSize} onPick={onTypeSize} />
+        <h2 className="section-rule">
+          <span>SYSTEM</span>
+          <span className="rule-line" />
+        </h2>
+        <div className="settings-readline">
+          <span>{connected ? '● SYNC LIVE' : '○ OFFLINE'}</span>
+          <span>{pending > 0 ? `◐ ${pending} QUEUED` : 'QUEUE EMPTY'}</span>
+        </div>
+        <div className="settings-readline">
+          <span>~/DataForge · markdown + git</span>
+        </div>
+        <div className="editor-actions">
+          <span className="spacer" />
+          <button type="button" className="ghost" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface ActionSlot {
+  title: string;
+  sub?: string;
+  href?: string;
+}
+
+/** The Actions page is a socket panel: slots read from actions.json; empty
+ * slots stay visible as dashed invitations rather than hidden features. */
+export function ActionsPage() {
+  const [slots, setSlots] = useState<ActionSlot[] | null>(null);
+  useEffect(() => {
+    fetch('/actions.json')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((j) => setSlots(Array.isArray(j) ? j.slice(0, 4) : []))
+      .catch(() => setSlots([]));
+  }, []);
+  const filled = slots ?? [];
+  const empties = Math.max(0, 4 - filled.length);
+  return (
+    <section className="actions-page">
+      {filled.map((s) => (
+        <a key={s.title} className="action-slot" href={s.href ?? '#'}>
+          <span className="action-title">{s.title}</span>
+          {s.sub && <span className="action-sub">{s.sub}</span>}
+          <span className="action-chevron">›</span>
+        </a>
+      ))}
+      {Array.from({ length: empties }, (_, i) => (
+        <button
+          key={`empty-${i}`}
+          type="button"
+          className="action-slot action-slot-empty"
+          onClick={() =>
+            flashNotice('Drop an actions.json in the web root to plug actions in')
+          }
+        >
+          [ + PLUG IN AN ACTION ]
+        </button>
+      ))}
+    </section>
+  );
+}
 
 export function useIsMobile(): boolean {
   const [mobile, setMobile] = useState(() => window.matchMedia(MOBILE_MEDIA_QUERY).matches);
@@ -120,6 +277,7 @@ export function BottomBar({
     ['notes', 'Notes', 'note'],
     ['agenda', 'Agenda', 'calendar'],
     ['capture', 'New', 'plus'],
+    ['actions', 'Actions', 'zap'],
     ['search', 'Search', 'search'],
   ];
   return (
@@ -360,18 +518,21 @@ export function Capture({ onSaved, onCanvas }: { onSaved?: () => void; onCanvas?
 
   return (
     <section className="capture">
-      <textarea
-        id="capture"
-        ref={ref}
-        placeholder={mobile ? 'Drop a thought…' : 'Drop a thought… (⌘↵ to save)'}
-        rows={3}
-        autoFocus
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void save();
-        }}
-      />
+      <div className="capture-line" data-empty={!text}>
+        <span className="capture-prompt">&gt;</span>
+        <textarea
+          id="capture"
+          ref={ref}
+          placeholder={mobile ? 'Drop a thought…' : 'Drop a thought… (⌘↵ to save)'}
+          rows={3}
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void save();
+          }}
+        />
+      </div>
       {/* Axes and Save share one row: no dead band between the last control
           and the action, and the eye travels summary → Save in a line. */}
       <div className="capture-foot">
@@ -410,55 +571,18 @@ export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }
   const reminder = doc.reminders.find((r) => r.status !== 'done');
   const overdue = reminder ? new Date(effectiveFireAt(reminder)).getTime() < Date.now() : false;
   const kind = cardKind(doc, canvas, !!reminder);
-  // Ordered by signal strength: what needs attention (reminder) first, then the
-  // axes that differ from the capture default (so a normal/draft note stays quiet).
-  const tags: JSX.Element[] = [];
-  if (reminder)
-    tags.push(
-      <span key="rem" className="tag" data-kind="reminder" data-overdue={overdue}>
-        <Icon name="bell" />
-        {reminderLabel(reminder.at)}
-      </span>,
-    );
-  if (doc.importance !== CAPTURE_DEFAULTS.importance)
-    tags.push(
-      <span key="imp" className="tag" data-kind="importance" data-value={doc.importance}>
-        {doc.importance}
-      </span>,
-    );
-  // A canvas's working/draft axes are its own creation defaults, not a signal
-  // the user chose — chips would repeat on every canvas card and say nothing.
-  if (!canvas && doc.durability !== CAPTURE_DEFAULTS.durability)
-    tags.push(
-      <span key="dur" className="tag">
-        {doc.durability}
-      </span>,
-    );
-  if (!canvas && doc.formality !== CAPTURE_DEFAULTS.formality)
-    tags.push(
-      <span key="form" className="tag">
-        {doc.formality}
-      </span>,
-    );
-  if (doc.pinned)
-    tags.push(
-      <span key="pin" className="tag">
-        <Icon name="pin" />
-        pinned
-      </span>,
-    );
-  if (doc.source.startsWith('conflict:'))
-    tags.push(
-      <span key="conflict" className="tag" data-kind="importance" data-value="critical">
-        conflict
-      </span>,
-    );
-  if (doc.rev === 0)
-    tags.push(
-      <span key="unsynced" className="tag">
-        unsynced
-      </span>,
-    );
+  const durDev = !canvas && doc.durability !== CAPTURE_DEFAULTS.durability;
+  const formDev = !canvas && doc.formality !== CAPTURE_DEFAULTS.formality;
+  const impMark = doc.importance === 'high' || doc.importance === 'critical';
+  const hasMeta =
+    !!reminder ||
+    impMark ||
+    durDev ||
+    formDev ||
+    doc.pinned ||
+    canvas ||
+    doc.source.startsWith('conflict:') ||
+    doc.rev === 0;
   // A div with button semantics, not a <button>: the quick-action menu nests
   // its own buttons inside, which HTML forbids inside a real button element.
   return (
@@ -509,8 +633,137 @@ export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }
         />
       </div>
       {doc.preview && <div className="card-preview">{doc.preview}</div>}
-      {tags.length > 0 && <div className="card-tags">{tags}</div>}
+      {hasMeta && (
+        <div className="card-meta">
+          {reminder && <ReminderChip doc={doc} reminder={reminder} overdue={overdue} />}
+          {impMark && (
+            <span className="mark mark-imp" data-value={doc.importance}>
+              {doc.importance === 'high' ? '◇ HIGH' : '◆ CRITICAL'}
+            </span>
+          )}
+          {(durDev || formDev) && (
+            <button
+              type="button"
+              className="axes-inline"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen();
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              {[durDev ? doc.durability : null, formDev ? doc.formality : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </button>
+          )}
+          {doc.pinned && <span className="mark">▲ PINNED</span>}
+          {canvas && <span className="mark">▨ CANVAS</span>}
+          {doc.source.startsWith('conflict:') && (
+            <span className="mark mark-imp" data-value="critical">
+              ◆ CONFLICT
+            </span>
+          )}
+          {doc.rev === 0 && <span className="mark">○ LOCAL</span>}
+        </div>
+      )}
+      {/* Trailing 44px complete box: the reminder finishes from the list,
+          no tab switch, no note opening. */}
+      {reminder && (
+        <button
+          type="button"
+          className="card-complete"
+          title="Mark done"
+          onClick={(e) => {
+            e.stopPropagation();
+            const idx = doc.reminders.findIndex((r) => r.status !== 'done');
+            void actOnReminder(doc.id, idx, 'done');
+          }}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <Icon name="check" />
+        </button>
+      )}
     </div>
+  );
+}
+
+/** The reminder chip is editable-here (dashed + bell): tapping opens the same
+ * preset menu used everywhere — reschedule or complete without opening the
+ * note. */
+function ReminderChip({
+  doc,
+  reminder,
+  overdue,
+}: {
+  doc: ServerDoc;
+  reminder: Reminder;
+  overdue: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent): void => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [open]);
+  const idx = doc.reminders.findIndex((r) => r.status !== 'done');
+  const reschedule = (at: Date): void => {
+    const reminders = doc.reminders.map((r, i) => (i === idx ? { ...r, at: nowIso(at) } : r));
+    void saveDoc(doc.id, doc.rev, { reminders });
+  };
+  return (
+    <span className="menu-wrap" ref={ref}>
+      <button
+        type="button"
+        className="chip-reminder"
+        data-overdue={overdue}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <Icon name="bell" />
+        {reminderLabel(effectiveFireAt(reminder))}
+        {reminder.rrule && <span className="mark-recur"> ↻</span>}
+      </button>
+      {open && (
+        <div className="menu" role="menu">
+          {reminderPresets(new Date()).map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                reschedule(p.at);
+              }}
+            >
+              <Icon name="snooze" />
+              {p.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+              void actOnReminder(doc.id, idx, 'done');
+            }}
+          >
+            <Icon name="check" />
+            Mark done
+          </button>
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -579,9 +832,13 @@ export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: strin
       {groups.map(({ name, detail, list, hint }) =>
         list.length === 0 && !hint ? null : (
           <div className="agenda-group" key={name}>
-            <h2 className={`agenda-heading${name === 'Overdue' ? ' overdue' : ''}`}>
-              {name}
-              {detail && <span className="agenda-date"> · {detail}</span>}
+            <h2 className={`section-rule${name === 'Overdue' ? ' overdue' : ''}`}>
+              <span>
+                {name.toUpperCase()}
+                {detail && <span className="rule-detail"> · {detail}</span>}
+              </span>
+              <span className="rule-line" />
+              <span className="rule-count">{list.length}</span>
             </h2>
             {list.length === 0 && hint && <p className="agenda-hint">{hint}</p>}
             {list.map((e) => (
@@ -993,6 +1250,7 @@ export function EditorPanel({
       >
         {!canvas && (
           <div className="editor-head">
+            <span className="file-path">~/DataForge/notes/{doc.id}.md</span>
             <button
               type="button"
               className="icon-btn head-toggle"

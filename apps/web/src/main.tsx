@@ -1,3 +1,10 @@
+// Self-hosted IBM Plex (latin subsets) — the press-vs-read type split of the
+// TEMPERED identity. No CDN: strict CSP, offline-first.
+import '@fontsource/ibm-plex-sans/latin-400.css';
+import '@fontsource/ibm-plex-sans/latin-500.css';
+import '@fontsource/ibm-plex-sans/latin-600.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
 import '@forge/tokens/tokens.css';
 import './app.css';
 import { StrictMode } from 'react';

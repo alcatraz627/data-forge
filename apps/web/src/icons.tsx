@@ -114,6 +114,7 @@ const PATHS: Record<string, JSX.Element> = {
   ),
   pin: <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />,
   chevron: <polyline points="6 9 12 15 18 9" />,
+  zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
   maximize: (
     <>
       <polyline points="15 3 21 3 21 9" />

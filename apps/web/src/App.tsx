@@ -1,41 +1,67 @@
 import { DEFAULT_VIEWS, type ServerDoc, type ViewDef, matchesView } from '@forge/core';
 import { useEffect, useMemo, useState } from 'react';
-import { Icon } from './icons';
-import { captureCanvas, filterDocs, flashNotice, startSync, useForge } from './store';
 import {
+  ActionsPage,
   Agenda,
   BottomBar,
   Capture,
   EditorPanel,
+  type ListDensity,
   type MobileScreen,
   NoteCard,
+  Readout,
+  SettingsSheet,
   ViewChips,
   useIsMobile,
 } from './ui';
+import { Icon } from './icons';
+import { captureCanvas, filterDocs, startSync, useForge } from './store';
 
-type Theme = 'dark' | 'light';
+/** dark | light | system. `system` removes the data-theme attribute so the
+ * stylesheet's prefers-color-scheme branch decides. */
+export type ThemeMode = 'dark' | 'light' | 'system';
 
-function useTheme(): [Theme, () => void] {
-  const [theme, setTheme] = useState<Theme>(() =>
-    localStorage.getItem('forge-theme') === 'light' ? 'light' : 'dark',
-  );
+function useThemeMode(): [ThemeMode, (m: ThemeMode) => void] {
+  const [mode, setMode] = useState<ThemeMode>(() => {
+    const stored = localStorage.getItem('forge-theme-mode');
+    if (stored === 'dark' || stored === 'light' || stored === 'system') return stored;
+    // pre-TEMPERED key
+    return localStorage.getItem('forge-theme') === 'light' ? 'light' : 'dark';
+  });
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem('forge-theme', theme);
-  }, [theme]);
-  return [theme, () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))];
+    if (mode === 'system') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = mode;
+    localStorage.setItem('forge-theme-mode', mode);
+  }, [mode]);
+  return [mode, setMode];
 }
 
+export type TypeSize = 'S' | 'M' | 'L';
+export type DensityPref = 'compact' | 'relaxed';
+
 const ALL_VIEW: ViewDef = { id: 'all', name: 'All', filter: {} };
+const LIST_DENSITIES: ListDensity[] = ['skim', 'list', 'cards'];
 
 export default function App() {
-  const [theme, toggleTheme] = useTheme();
+  const [themeMode, setThemeMode] = useThemeMode();
   const snap = useForge();
   const isMobile = useIsMobile();
   const [query, setQuery] = useState('');
   const [viewId, setViewId] = useState('all');
   const [screen, setScreen] = useState<MobileScreen>('notes');
   const [agendaMode, setAgendaMode] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [typeSize, setTypeSize] = useState<TypeSize>(
+    () => (localStorage.getItem('forge-type-size') as TypeSize) || 'M',
+  );
+  const [densityPref, setDensityPref] = useState<DensityPref>(() => {
+    const stored = localStorage.getItem('forge-density-pref');
+    return stored === 'relaxed' || stored === 'compact' ? stored : 'compact';
+  });
+  const [listDensity, setListDensity] = useState<ListDensity>(() => {
+    const stored = localStorage.getItem('forge-list-density');
+    return stored === 'skim' || stored === 'cards' ? stored : 'list';
+  });
   // Captured at click time: the editor works on a stable snapshot (its own
   // baseRev handles concurrent changes), so a live delete elsewhere can't
   // yank the panel out from under in-progress typing.
@@ -45,6 +71,16 @@ export default function App() {
   const [closeToken, setCloseToken] = useState(0);
 
   useEffect(() => startSync(), []);
+  useEffect(() => {
+    document.documentElement.dataset.typeSize = typeSize;
+    localStorage.setItem('forge-type-size', typeSize);
+  }, [typeSize]);
+  useEffect(() => {
+    localStorage.setItem('forge-density-pref', densityPref);
+  }, [densityPref]);
+  useEffect(() => {
+    localStorage.setItem('forge-list-density', listDensity);
+  }, [listDensity]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -93,63 +129,33 @@ export default function App() {
   const showCapture = !isMobile ? !agendaMode : screen === 'capture';
   const showSearch = !isMobile ? !agendaMode : screen === 'search';
   const showChips = !isMobile ? !agendaMode : screen === 'notes';
-  const showStream = !showAgenda && (!isMobile ? !agendaMode : screen !== 'capture');
+  const showActions = isMobile && screen === 'actions';
+  const showStream =
+    !showAgenda && !showActions && (!isMobile ? !agendaMode : screen !== 'capture');
   const reminderCount = useMemo(
     () => snap.docs.filter((d) => d.reminders.some((r) => r.status !== 'done')).length,
     [snap.docs],
   );
 
-  // One glanceable sync state instead of a dot plus a separate pending
-  // counter: synced (green) / pending (amber + queued count) / offline (red).
-  // Count and color differ together, so the state never rides on color alone.
   const syncState = !snap.connected ? 'offline' : snap.pending > 0 ? 'pending' : 'synced';
-  const syncTitle =
-    syncState === 'offline'
-      ? 'Offline — changes queue locally and sync when back'
-      : syncState === 'pending'
-        ? `${snap.pending} queued change${snap.pending === 1 ? '' : 's'}`
-        : 'Synced';
+
+  const cycleListDensity = (): void => {
+    const next =
+      LIST_DENSITIES[(LIST_DENSITIES.indexOf(listDensity) + 1) % LIST_DENSITIES.length] ?? 'list';
+    setListDensity(next);
+  };
 
   return (
-    <div className={isMobile ? 'app app-mobile' : 'app'} data-density={isMobile ? 'compact' : 'comfortable'}>
-      <header className="topbar">
-        <h1>
-          <Icon name="note" />
-          Data Forge
-        </h1>
-        <div className="topbar-right">
-          <button
-            type="button"
-            className="sync-chip"
-            data-state={syncState}
-            title={syncTitle}
-            onClick={() => flashNotice(syncTitle)}
-          >
-            <span className="sync-dot" />
-            {syncState === 'pending' && <span className="sync-count">{snap.pending}</span>}
-            {syncState === 'offline' && <span className="sync-label">offline</span>}
-          </button>
-          {!isMobile && (
-            <button
-              type="button"
-              className={`ghost${agendaMode ? ' active' : ''}`}
-              onClick={() => setAgendaMode((a) => !a)}
-              title="Agenda"
-            >
-              <Icon name="bell" />
-              agenda{reminderCount ? ` · ${reminderCount}` : ''}
-            </button>
-          )}
-          <button
-            type="button"
-            className="icon-btn"
-            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            onClick={toggleTheme}
-          >
-            <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
-          </button>
-        </div>
-      </header>
+    <div
+      className={isMobile ? 'app app-mobile' : 'app'}
+      data-density={densityPref}
+      data-list-density={listDensity}
+    >
+      <Readout
+        syncState={syncState}
+        pending={snap.pending}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
 
       <main>
         {showCapture && (
@@ -168,8 +174,19 @@ export default function App() {
             onChange={(e) => setQuery(e.target.value)}
           />
         )}
-        {showChips && !query.trim() && (
-          <ViewChips views={DEFAULT_VIEWS} active={viewId} counts={counts} onPick={setViewId} />
+        {showChips && !query.trim() && !isMobile && (
+          <div className="desktop-filter-row">
+            <ViewChips views={DEFAULT_VIEWS} active={viewId} counts={counts} onPick={setViewId} />
+            <span className="spacer" />
+            <button
+              type="button"
+              className={`ghost${agendaMode ? ' active' : ''}`}
+              onClick={() => setAgendaMode((a) => !a)}
+            >
+              <Icon name="bell" />
+              agenda{reminderCount ? ` · ${reminderCount}` : ''}
+            </button>
+          </div>
         )}
         {showAgenda && (
           <Agenda
@@ -177,13 +194,16 @@ export default function App() {
             onOpen={(id) => setOpenDoc(snap.docs.find((d) => d.id === id) ?? null)}
           />
         )}
+        {showActions && <ActionsPage />}
         {showStream && isMobile && screen === 'search' && !query.trim() ? (
           // Pre-query search is a launchpad (pinned + recent), not a clone of
           // the Notes list — the two tabs stop showing identical content.
           <section className="stream search-start">
             {snap.docs.filter((d) => d.pinned && matchesView(d, ALL_VIEW)).length > 0 && (
               <>
-                <h2 className="group-heading">Pinned</h2>
+                <h2 className="section-rule">
+                  <span>PINNED</span>
+                </h2>
                 {snap.docs
                   .filter((d) => d.pinned && matchesView(d, ALL_VIEW))
                   .slice(0, 3)
@@ -192,7 +212,9 @@ export default function App() {
                   ))}
               </>
             )}
-            <h2 className="group-heading">Recent</h2>
+            <h2 className="section-rule">
+              <span>RECENT</span>
+            </h2>
             {snap.docs
               .filter((d) => !d.pinned && matchesView(d, ALL_VIEW))
               .slice(0, 4)
@@ -205,7 +227,9 @@ export default function App() {
           <section className="stream">
             {docs.length === 0 ? (
               <div className="empty">
-                <Icon name={query || (isMobile && screen === 'search') ? 'search' : 'inbox'} />
+                <span className="empty-glyph">
+                  {query || (isMobile && screen === 'search') ? '>' : '▮'}
+                </span>
                 <p>
                   {!snap.loaded
                     ? 'Connecting…'
@@ -224,7 +248,7 @@ export default function App() {
                       : isMobile && screen === 'search'
                         ? 'Type above to find any note.'
                         : viewId === 'all'
-                          ? 'Drop your first thought above.'
+                          ? 'Drop your first thought.'
                           : 'Notes matching this view will show here.'}
                   </span>
                 )}
@@ -235,6 +259,23 @@ export default function App() {
           </section>
         ) : null}
       </main>
+
+      {/* Page bar: page-scoped filters/actions in thumb reach, directly above
+          the tab bar. Never navigation, never more than one row. */}
+      {isMobile && screen === 'notes' && !query.trim() && (
+        <div className="page-bar">
+          <ViewChips views={DEFAULT_VIEWS} active={viewId} counts={counts} onPick={setViewId} />
+          <span className="spacer" />
+          <button
+            type="button"
+            className="density-toggle"
+            title="List density"
+            onClick={cycleListDensity}
+          >
+            {listDensity === 'skim' ? 'Skim' : listDensity === 'list' ? 'List' : 'Cards'}
+          </button>
+        </div>
+      )}
 
       {isMobile && (
         <BottomBar
@@ -254,6 +295,19 @@ export default function App() {
           doc={openDoc}
           closeToken={closeToken}
           onClose={() => setOpenDoc(null)}
+        />
+      )}
+      {settingsOpen && (
+        <SettingsSheet
+          themeMode={themeMode}
+          onThemeMode={setThemeMode}
+          typeSize={typeSize}
+          onTypeSize={setTypeSize}
+          density={densityPref}
+          onDensity={setDensityPref}
+          pending={snap.pending}
+          connected={snap.connected}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
       {snap.notice && (
