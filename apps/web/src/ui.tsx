@@ -766,8 +766,11 @@ function ReminderEditor({
       ))}
       <div className="reminder-presets">
         <span className="preset-label">Remind me</span>
+        {/* Leading + marks these as one-shot ADD actions — without it they
+            read as another pick-one segmented control like REPEAT above. */}
         {reminderPresets(new Date()).map((p) => (
           <button key={p.label} type="button" className="preset-chip" onClick={() => add(p.at)}>
+            <Icon name="plus" />
             {p.label}
           </button>
         ))}
@@ -922,11 +925,15 @@ export function EditorPanel({
     }
   };
 
+  // Set synchronously on the first stroke — the discard decision below must
+  // never race tldraw's 500ms body-serialization debounce (review R3 #2).
+  const canvasTouched = useRef(false);
+
   const maybeClose = (): void => {
     // A canvas with no strokes at all is an artifact of tapping "New canvas" —
     // closing it deletes it, so backing out of a new canvas leaves nothing
     // behind (and opening a stray empty one heals it).
-    if (canvas && body === emptyCanvasBody()) {
+    if (canvas && body === emptyCanvasBody() && !canvasTouched.current) {
       void removeDoc(doc.id);
       flashNotice('Empty canvas discarded');
       onClose();
@@ -934,8 +941,10 @@ export function EditorPanel({
     }
     // Dirty edits auto-save on the way out: the outbox + files-as-truth make
     // a fire-and-forget save safe offline, and it retires the old
-    // "Discard unsaved edits?" gauntlet.
-    if (dirty && !busy) void save();
+    // "Discard unsaved edits?" gauntlet. saveDoc directly, not save(): the
+    // busy gate must not drop keystrokes typed while a save was in flight —
+    // the outbox coalesces the second enqueue.
+    if (dirty) void saveDoc(doc.id, baseRev, { body, ...axes, reminders });
     onClose();
   };
 
@@ -958,10 +967,10 @@ export function EditorPanel({
     onClose();
   };
 
-  // Archive is a discrete state change, not a tracked edit: it applies and
-  // closes rather than waiting for Save.
+  // Archive applies and closes; it carries the current edits along so
+  // archiving mid-edit never discards typed text.
   const toggleArchive = async (): Promise<void> => {
-    await saveDoc(doc.id, baseRev, { archived: !doc.archived });
+    await saveDoc(doc.id, baseRev, { body, ...axes, reminders, archived: !doc.archived });
     flashNotice(doc.archived ? 'Note restored' : 'Archived — it lives on in the Archive view');
     onClose();
   };
@@ -986,11 +995,44 @@ export function EditorPanel({
           <div className="editor-head">
             <button
               type="button"
-              className="icon-btn"
+              className="icon-btn head-toggle"
               title={layout === 'contained' ? 'Fullscreen' : 'Exit fullscreen'}
               onClick={toggleLayout}
             >
               <Icon name={layout === 'contained' ? 'maximize' : 'minimize'} />
+            </button>
+          </div>
+        )}
+        {/* Canvas gets a slim top bar and NO bottom action bar: tldraw owns
+            the bottom of the screen (its toolbar + the tab bar are already
+            two stacked chromes — a third was mis-tap territory). Drawing
+            saves on close like any other dirty edit. */}
+        {canvas && (
+          <div className="canvas-topbar">
+            <ActionMenu
+              title="More actions"
+              items={[
+                {
+                  icon: 'archive' as IconName,
+                  label: doc.archived ? 'Unarchive' : 'Archive',
+                  onPick: () => void toggleArchive(),
+                },
+                {
+                  icon: 'trash' as IconName,
+                  label: 'Delete note',
+                  danger: true,
+                  onPick: del,
+                },
+              ]}
+            />
+            <span className="spacer" />
+            <button
+              type="button"
+              className="icon-btn head-toggle"
+              title="Save and close"
+              onClick={maybeClose}
+            >
+              <Icon name="x" />
             </button>
           </div>
         )}
@@ -999,7 +1041,13 @@ export function EditorPanel({
         ) : canvas ? (
           <CanvasErrorBoundary>
             <Suspense fallback={<div className="canvas-loading">Opening canvas…</div>}>
-              <LazyCanvasEditor value={body} onChange={setBody} />
+              <LazyCanvasEditor
+                value={body}
+                onChange={setBody}
+                onTouch={() => {
+                  canvasTouched.current = true;
+                }}
+              />
             </Suspense>
           </CanvasErrorBoundary>
         ) : (
@@ -1022,6 +1070,7 @@ export function EditorPanel({
             <ReminderEditor reminders={reminders} onChange={setReminders} />
           </div>
         )}
+        {!canvas && (
         <div className="editor-actions">
           <ActionMenu
             up
@@ -1033,6 +1082,25 @@ export function EditorPanel({
                       icon: (editorMode === 'rich' ? 'code' : 'pencil') as IconName,
                       label: editorMode === 'rich' ? 'Raw markdown' : 'Rich text',
                       onPick: toggleMode,
+                    },
+                  ]
+                : []),
+              // Auto-save-on-close removed the discard dialog; this is the
+              // deliberate way to walk away from unwanted edits instead.
+              ...(dirty
+                ? [
+                    {
+                      icon: 'x' as IconName,
+                      label: 'Discard changes',
+                      onPick: () => {
+                        setBody(saved.body);
+                        setAxes({
+                          durability: saved.durability,
+                          formality: saved.formality,
+                          importance: saved.importance,
+                        });
+                        setReminders(JSON.parse(saved.reminders));
+                      },
                     },
                   ]
                 : []),
@@ -1068,6 +1136,7 @@ export function EditorPanel({
             {busy ? 'Saving…' : 'Save'}
           </button>
         </div>
+        )}
       </div>
     </div>
   );

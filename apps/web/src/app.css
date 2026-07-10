@@ -113,10 +113,15 @@ body {
   min-width: var(--tap);
   padding: var(--space-1) var(--space-2);
   background: transparent;
-  border-color: transparent;
+  /* Visible chip chrome: reads as a status control, not a stray dot beside
+     the theme toggle (a fresh vision read mistook the bare dot for a second
+     theme button). */
+  border: 1px solid var(--border);
+  border-radius: 999px;
   gap: 6px;
   font-size: var(--text-sm);
   color: var(--dim);
+  margin-right: var(--space-2);
 }
 
 .sync-chip .sync-dot {
@@ -246,11 +251,13 @@ button.danger:hover {
   box-shadow: var(--shadow-1);
 }
 
-/* Axes summary and Save share one line — no dead band below the textarea. */
+/* Axes summary and Save share one line — no dead band below the textarea.
+   The wide gap keeps the axes-expand chevron and Save from being adjacent
+   mis-tap targets on the capture loop. */
 .capture-foot {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-3);
+  gap: var(--space-5);
 }
 
 .capture-foot .axis-disclosure {
@@ -258,17 +265,20 @@ button.danger:hover {
   min-width: 0;
 }
 
+/* The only canvas entry point — it must read as an action, not a caption. */
 .start-canvas {
   justify-self: start;
-  min-height: 34px;
-  padding: var(--space-1) var(--space-2);
-  border-color: transparent;
-  color: var(--faint);
+  min-height: 36px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  color: var(--dim);
   font-size: var(--text-sm);
 }
 
 .start-canvas:hover {
   color: var(--accent);
+  border-color: var(--accent);
 }
 
 .capture textarea,
@@ -356,16 +366,23 @@ button.danger:hover {
   box-shadow: var(--shadow-1);
 }
 
-/* Importance row: every selected pill keeps the same neutral shape as the
-   other axes (a differently-styled pill reads as a glitch, not a meaning);
-   only high and critical spend colour. */
-.axis-row[data-axis="importance"] .chip-active[data-value="high"] {
-  background: var(--imp-high);
-  color: var(--on-accent);
+/* Importance row: the SAME encoding as cards — neutral pill + colored dot —
+   so one meaning has one visual form everywhere. Selected keeps the shared
+   neutral fill; the dot rides along selected or not. */
+.axis-row[data-axis="importance"] .chip[data-value="high"]::before,
+.axis-row[data-axis="importance"] .chip[data-value="critical"]::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: none;
+  margin-right: 6px;
 }
-.axis-row[data-axis="importance"] .chip-active[data-value="critical"] {
+.axis-row[data-axis="importance"] .chip[data-value="high"]::before {
+  background: var(--imp-high);
+}
+.axis-row[data-axis="importance"] .chip[data-value="critical"]::before {
   background: var(--imp-critical);
-  color: var(--on-accent);
 }
 
 /* ── Search ────────────────────────────────────────────────────────── */
@@ -623,16 +640,11 @@ button.danger:hover {
   flex: none;
 }
 
-.tag[data-kind="importance"][data-value="high"] {
-  background: color-mix(in srgb, var(--imp-high) 14%, var(--surface-2));
-}
-
+/* Dot-only, neutral pill: the dot keeps priority on the card face (rails can
+   be skim-missed) without adding a third colored mass to a card that may
+   already stack an importance rail and an overdue chip. */
 .tag[data-kind="importance"][data-value="high"]::before {
   background: var(--imp-high);
-}
-
-.tag[data-kind="importance"][data-value="critical"] {
-  background: color-mix(in srgb, var(--imp-critical) 16%, var(--surface-2));
 }
 
 .tag[data-kind="importance"][data-value="critical"]::before {
@@ -643,12 +655,16 @@ button.danger:hover {
   color: var(--accent);
 }
 
+/* Overdue is its own token, not --danger (destructive actions), and it gets
+   weight as a second cue — the most consequential state in a reminders app
+   must not ride on a small hue shift alone. */
 .tag[data-kind="reminder"][data-overdue="true"] {
-  color: var(--danger);
+  color: var(--overdue);
+  font-weight: 600;
 }
 
 .tag[data-kind="reminder"][data-overdue="true"] .icon {
-  color: var(--danger);
+  color: var(--overdue);
 }
 
 /* ── Action menus ──────────────────────────────────────────────────── */
@@ -776,7 +792,7 @@ button.danger:hover {
 }
 
 .app-mobile main {
-  padding-bottom: 88px;
+  padding-bottom: calc(var(--tabbar-h) + var(--space-5));
 }
 
 /* ── Editor (dialog on desktop, bottom sheet on mobile) ────────────── */
@@ -815,18 +831,13 @@ button.danger:hover {
   margin: calc(var(--space-2) * -1) calc(var(--space-2) * -1) calc(var(--space-3) * -1) 0;
 }
 
-.editor-head .icon-btn {
-  min-height: 34px;
-  min-width: 34px;
-  color: var(--faint);
-}
 
 /* Fullscreen: the editor becomes the screen. On phones it stops above the
    tab bar (see the mobile block below) so navigation stays reachable. */
 .editor-fullscreen {
   position: fixed;
   inset: 0;
-  width: 100vw;
+  width: 100%;
   height: 100dvh;
   max-height: none;
   border: none;
@@ -844,13 +855,33 @@ button.danger:hover {
   min-height: 160px;
 }
 
-/* Canvas host: two grid rows — the drawing surface takes everything, the
-   action bar keeps its natural height. Canvas notes only ever open in the
-   fullscreen host (a scrolling sheet fights tldraw for both height and touch
-   gestures), so no contained-canvas sizing exists anymore. */
+/* Canvas host: a slim top bar, then the drawing surface takes everything —
+   tldraw owns the bottom of the screen (no app action bar stacked over its
+   toolbar). Canvas notes only ever open in the fullscreen host (a scrolling
+   sheet fights tldraw for both height and touch gestures). */
 .editor-canvas {
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: var(--space-3);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.canvas-topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The head/topbar controls are primary reachability surfaces (the user's
+   headline toggle lives here): full tap size, readable at rest. */
+.head-toggle {
+  min-height: 44px;
+  min-width: 44px;
+  color: var(--dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.head-toggle:hover {
+  color: var(--text);
 }
 
 .canvas-surface {
@@ -1059,6 +1090,14 @@ button.danger:hover {
   flex-wrap: wrap;
   padding-top: var(--space-3);
   border-top: 1px solid var(--border);
+  /* The action bar never scrolls out of reach: it pins to the scrollport
+     bottom once content (long note, reminder blocks) grows past the fold. */
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  margin-inline: calc(-1 * var(--space-4));
+  padding-inline: var(--space-4);
+  padding-bottom: var(--space-2);
 }
 
 .editor-actions .spacer {
@@ -1177,12 +1216,6 @@ button.ghost.active {
   border-style: solid;
 }
 
-.helper {
-  font-size: var(--text-sm);
-  color: var(--faint);
-  line-height: 1.5;
-}
-
 /* ── Agenda ────────────────────────────────────────────────────────── */
 .agenda {
   margin-top: var(--space-4);
@@ -1205,7 +1238,7 @@ button.ghost.active {
 }
 
 .agenda-heading.overdue {
-  color: var(--danger);
+  color: var(--overdue);
 }
 
 .agenda-heading .agenda-date {
@@ -1251,7 +1284,7 @@ button.ghost.active {
 }
 
 .agenda-item.is-overdue .agenda-complete {
-  border-color: color-mix(in srgb, var(--danger) 65%, transparent);
+  border-color: color-mix(in srgb, var(--overdue) 70%, transparent);
 }
 
 .agenda-complete:hover,
@@ -1299,13 +1332,30 @@ button.ghost.active {
 }
 
 .agenda-when.overdue {
-  color: var(--danger);
+  color: var(--overdue);
+  font-weight: 600;
 }
 
+/* Snooze must read as a button, not a decorative clock: circular chrome,
+   full tap size, pressed state. */
 .agenda-actions {
   display: flex;
   gap: var(--space-1);
   flex: none;
+}
+
+.agenda-actions .icon-btn {
+  min-height: 44px;
+  min-width: 44px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--dim);
+}
+
+.agenda-actions .icon-btn:hover,
+.agenda-actions .icon-btn:active {
+  color: var(--text);
+  background: var(--surface-2);
 }
 
 /* ── History ───────────────────────────────────────────────────────── */
@@ -1406,7 +1456,7 @@ button.ghost.active {
 
 /* Clear the bottom tab bar on phones. */
 .app-mobile .toast {
-  bottom: calc(76px + env(safe-area-inset-bottom));
+  bottom: calc(var(--tabbar-h) + var(--space-3));
 }
 
 /* ── Search launchpad (pre-query) ──────────────────────────────────── */
@@ -1435,8 +1485,21 @@ button.ghost.active {
   -webkit-line-clamp: 1;
 }
 
+[data-density="compact"] .card-title {
+  font-size: var(--text-md);
+}
+
+[data-density="compact"] .card-top {
+  gap: var(--space-2);
+}
+
 [data-density="compact"] .agenda {
-  gap: var(--space-4);
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+[data-density="compact"] .agenda-group {
+  gap: var(--space-1);
 }
 
 [data-density="compact"] .agenda-item {
@@ -1521,6 +1584,12 @@ button.ghost.active {
      tab-bar padding would double-count the clearance. */
   .editor-fullscreen {
     padding-bottom: var(--space-3);
+  }
+
+  /* In the contained sheet the tab bar overlays the sheet's lowest strip, so
+     the sticky action bar pins just above it, not under it. */
+  .editor:not(.editor-fullscreen) .editor-actions {
+    bottom: var(--tabbar-h);
   }
 
   .editor textarea {

@@ -9,9 +9,14 @@ import 'tldraw/tldraw.css';
 export default function CanvasEditor({
   value,
   onChange,
+  onTouch,
 }: {
   value: string;
   onChange: (body: string) => void;
+  /** Fires synchronously on the FIRST user change, before the debounce —
+   * close-time decisions (e.g. empty-canvas discard) must not race the
+   * 500ms serialization window. */
+  onTouch?: () => void;
 }) {
   const dark = document.documentElement.dataset.theme !== 'light';
   return (
@@ -32,6 +37,7 @@ export default function CanvasEditor({
           let timer: ReturnType<typeof setTimeout> | undefined;
           editor.store.listen(
             () => {
+              onTouch?.();
               if (timer) clearTimeout(timer);
               timer = setTimeout(() => onChange(canvasToBody(getSnapshot(editor.store))), 500);
             },
