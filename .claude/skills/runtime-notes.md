@@ -1,3 +1,42 @@
+## session: M7 design round + build [forge-ux-7e] — 2026-07-10
+
+Purpose: full design round on user request — designer review by aspect, magi
+full-mode judgment of the change plan, build M7, then persona re-critique of
+the BUILT UI with gcc vision tools. Artifacts under
+.claude/output/20260710-design-round/ (review, plan, magi-verdict, backlog).
+
+Insights:
+- The two-round panel structure caught what one round couldn't: round 2
+  (judge the plan) surfaced auto-save-on-background and the token-VALUE
+  collision; round 3 (critique the BUILT pixels) caught a sticky-bar
+  regression and TWO real data-loss races that only exist because round 2's
+  auto-save recommendation shipped. Recommendations create their own new
+  failure modes — re-review after building, not just before.
+- The two races: (1) close-while-save-in-flight skipped the flush (busy
+  gate) and dropped post-save keystrokes — fix: direct saveDoc on close,
+  outbox coalesces; (2) empty-canvas discard raced tldraw's 500ms debounce —
+  one stroke + fast close deleted the note. Fix: synchronous onTouch signal,
+  never gate destructive decisions on debounced state.
+- CSS grid + ::before trap: a pseudo-element is a real grid item. The sheet's
+  grab-handle ::before silently consumed .editor-canvas's minmax(0,1fr) row,
+  collapsing tldraw to 2px. If a grid's rows are enumerated, every
+  pseudo-element on the container counts.
+- `see --ui` (local vision) as critique ground truth earns its keep through
+  MISREADS: it called the bare sync dot "likely a dark mode toggle" and the
+  reminder preset chips a "selection group" — both were real discoverability
+  defects a fresh human would hit. A cheap model's confusion is a signal, not
+  noise.
+- Persona teammates (SendMessage reuse of magi voters) sometimes idle without
+  delivering; a one-line "please deliver via reply" ping recovers them. Plan
+  for it rather than re-spawning.
+- Three seats independently read magenta/rose critical as LESS urgent than
+  the red beside it — perceived-urgency ranks hues (scarlet > crimson >
+  pink) regardless of token cleanliness. Deep red #c84a54/#9d3540 shipped.
+- Overdue must not share --danger: destructive-action red and you-are-late
+  red are different meanings; overdue also needed AA contrast + weight on
+  dark (small red text on surface-2 was ~3.7:1).
+
+---
 ## session: M6b interaction pass [forge-ux-7e] — 2026-07-09
 
 Purpose: user verdict on M6 was "technically great but lacking in usability
