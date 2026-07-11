@@ -42,6 +42,9 @@ export interface DocMeta {
   reminders: Reminder[];
   /** Capture origin, e.g. web | menubar | android-widget | api:<agent> | import:keep. */
   source: string;
+  /** Explicit labels, normalized (lowercase, no leading #). Complemented by
+   * #tags typed in the body; cards and search show the union of both. */
+  tags: string[];
 }
 
 /** A full document: metadata plus markdown body. Title is always derived

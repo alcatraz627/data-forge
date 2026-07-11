@@ -30,7 +30,9 @@ export function openDb(path: string): Db {
       archived INTEGER NOT NULL DEFAULT 0,
       source TEXT NOT NULL DEFAULT '',
       reminders TEXT NOT NULL DEFAULT '[]',
-      hash TEXT NOT NULL DEFAULT ''
+      hash TEXT NOT NULL DEFAULT '',
+      tags TEXT NOT NULL DEFAULT '[]',
+      canvas INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS docs_seq ON docs(seq);
     CREATE INDEX IF NOT EXISTS docs_path ON docs(path);
@@ -55,6 +57,9 @@ export function openDb(path: string): Db {
  * full definition); a column already present is skipped. */
 const EXPECTED_COLUMNS: Array<[string, string]> = [
   ['archived', 'archived INTEGER NOT NULL DEFAULT 0'],
+  // The searchable union of frontmatter tags and body #tags, as a JSON array.
+  ['tags', "tags TEXT NOT NULL DEFAULT '[]'"],
+  ['canvas', 'canvas INTEGER NOT NULL DEFAULT 0'],
 ];
 
 function migrateColumns(db: Db): void {

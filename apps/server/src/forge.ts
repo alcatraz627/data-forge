@@ -19,13 +19,18 @@ import {
   derivePreview,
   deriveTitle,
   docFromExternal,
-  isCanvas,
+  docTags,
+  hasCanvasBlock,
   isDocId,
+  isLegacyCanvas,
+  migrateLegacyCanvas,
   newId,
+  normalizeTags,
   nowIso,
   parseDoc,
   serializeDoc,
   snoozeReminder,
+  stripCanvasBlocks,
 } from '@forge/core';
 import { REV_KEEP, currentSeq, nextSeq, openDb, tx } from './db.js';
 import { Events } from './events.js';
@@ -51,13 +56,16 @@ interface DocRow {
   source: string;
   reminders: string;
   hash: string;
+  /** JSON array: the union of frontmatter tags and body #tags. */
+  tags: string;
+  canvas: number;
 }
 
 export type CreateResult = { ok: ServerDoc } | { error: 'id_exists' };
 
-/** Bump when deriveTitle/derivePreview semantics change, so boot re-derives
- * the stored titles/previews for rows written under the old rules. */
-const DERIVE_VERSION = '2';
+/** Bump when derivation semantics change (title, preview, tags, canvas flag),
+ * so boot re-derives the stored values for rows written under the old rules. */
+const DERIVE_VERSION = '3';
 
 /**
  * The single owner of the data directory. Every mutation flows through here:
@@ -77,14 +85,45 @@ export class Forge {
   ) {
     this.db = openDb(join(dataDir, 'meta', 'index.sqlite'));
     this.batcher = new GitBatcher(dataDir, opts.gitQuietMs);
+    this.migrateLegacyCanvasBodies();
     this.rederiveIndexedText();
   }
 
-  /** Heals stored titles/previews written under older derivation rules (e.g.
-   * canvas notes indexed before the marker earned a friendly title). Only the
-   * derived index changes — the files are untouched and revs stay put — but
-   * each corrected row takes a fresh seq so synced clients pull the fix
-   * instead of caching the stale text forever. Runs once per DERIVE_VERSION. */
+  /** One-time rewrite of whole-note legacy canvases into the canvas-block
+   * form (a fence inside ordinary markdown). Files change, so each migrated
+   * note takes a normal rev+seq bump and syncs out — but `updated` is kept,
+   * so nothing shuffles in recency order. Corrupt legacy bodies are left
+   * untouched for a human. Runs once, then stamps the kv store. */
+  private migrateLegacyCanvasBodies(): void {
+    const KEY = 'canvas_block_version';
+    const stamp = this.db.prepare('SELECT value FROM kv WHERE key = ?').get(KEY) as unknown as
+      | { value: string }
+      | undefined;
+    if (stamp?.value === '1') return;
+    const rows = this.db
+      .prepare('SELECT * FROM docs WHERE deleted = 0')
+      .all() as unknown as DocRow[];
+    let migrated = 0;
+    for (const row of rows) {
+      const head = this.headDoc(row);
+      if (!isLegacyCanvas(head.body)) continue;
+      const body = migrateLegacyCanvas(head.body);
+      if (body === head.body) continue;
+      const doc: Doc = { ...head, body };
+      const text = this.persist(doc, row.path);
+      const { seq } = this.indexDoc(doc, row.path, text);
+      this.afterWrite(seq);
+      migrated += 1;
+    }
+    if (migrated > 0) console.log(`canvas migration: ${migrated} note(s) → canvas blocks`);
+    this.db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, '1')").run(KEY);
+  }
+
+  /** Heals stored derived fields (title, preview, tags, canvas flag) written
+   * under older derivation rules. Only the derived index changes — the files
+   * are untouched and revs stay put — but each corrected row takes a fresh
+   * seq so synced clients pull the fix instead of caching the stale text
+   * forever. Runs once per DERIVE_VERSION. */
   private rederiveIndexedText(): void {
     const stamp = this.db
       .prepare("SELECT value FROM kv WHERE key = 'derive_version'")
@@ -94,24 +133,39 @@ export class Forge {
       .prepare('SELECT * FROM docs WHERE deleted = 0')
       .all() as unknown as DocRow[];
     for (const row of rows) {
-      const body = this.headDoc(row).body;
-      const title = deriveTitle(body);
-      const preview = derivePreview(body);
-      if (title === row.title && preview === row.preview) continue;
+      const head = this.headDoc(row);
+      const title = deriveTitle(head.body);
+      const preview = derivePreview(head.body);
+      const tags = JSON.stringify(docTags(head.tags, head.body));
+      const canvas = hasCanvasBlock(head.body) ? 1 : 0;
+      if (
+        title === row.title &&
+        preview === row.preview &&
+        tags === row.tags &&
+        canvas === row.canvas
+      )
+        continue;
       tx(this.db, () => {
         const seq = nextSeq(this.db);
         this.db
-          .prepare('UPDATE docs SET title = ?, preview = ?, seq = ? WHERE id = ?')
-          .run(title, preview, seq, row.id);
+          .prepare('UPDATE docs SET title = ?, preview = ?, tags = ?, canvas = ?, seq = ? WHERE id = ?')
+          .run(title, preview, tags, canvas, seq, row.id);
         this.db.prepare('DELETE FROM docs_fts WHERE id = ?').run(row.id);
         this.db
           .prepare('INSERT INTO docs_fts (id, title, body) VALUES (?, ?, ?)')
-          .run(row.id, title, isCanvas(body) ? '' : body);
+          .run(row.id, title, this.ftsText(head.body));
       });
     }
     this.db
       .prepare("INSERT OR REPLACE INTO kv (key, value) VALUES ('derive_version', ?)")
       .run(DERIVE_VERSION);
+  }
+
+  /** What full-text search sees of a body: prose only. Canvas JSON would
+   * pollute search with tldraw internals and bloat the FTS table (review L4);
+   * a not-yet-migrated legacy canvas body is all JSON, so it indexes empty. */
+  private ftsText(body: string): string {
+    return isLegacyCanvas(body) ? '' : stripCanvasBlocks(body);
   }
 
   abs(rel: string): string {
@@ -146,7 +200,9 @@ export class Forge {
     return row?.body ?? '';
   }
 
-  private toServerDoc(row: DocRow, body: string): ServerDoc {
+  /** tags come from the file's frontmatter when the caller has it parsed;
+   * the row's copy is the derived union and only serves as a fallback. */
+  private toServerDoc(row: DocRow, body: string, tags?: string[]): ServerDoc {
     return {
       id: row.id,
       created: row.created,
@@ -158,6 +214,7 @@ export class Forge {
       archived: row.archived === 1,
       reminders: JSON.parse(row.reminders),
       source: row.source,
+      tags: tags ?? (JSON.parse(row.tags) as string[]),
       body,
       rev: row.rev,
       title: row.title,
@@ -175,13 +232,16 @@ export class Forge {
       this.db
         .prepare(
           `INSERT INTO docs (id, path, rev, seq, deleted, title, preview, created, updated,
-             durability, formality, importance, pinned, archived, source, reminders, hash)
+             durability, formality, importance, pinned, archived, source, reminders, hash,
+             tags, canvas)
            VALUES (@id, @path, @rev, @seq, 0, @title, @preview, @created, @updated,
-             @durability, @formality, @importance, @pinned, @archived, @source, @reminders, @hash)
+             @durability, @formality, @importance, @pinned, @archived, @source, @reminders, @hash,
+             @tags, @canvas)
            ON CONFLICT(id) DO UPDATE SET path=@path, rev=@rev, seq=@seq, deleted=0,
              title=@title, preview=@preview, created=@created, updated=@updated,
              durability=@durability, formality=@formality, importance=@importance,
-             pinned=@pinned, archived=@archived, source=@source, reminders=@reminders, hash=@hash`,
+             pinned=@pinned, archived=@archived, source=@source, reminders=@reminders, hash=@hash,
+             tags=@tags, canvas=@canvas`,
         )
         .run({
           id: doc.id,
@@ -200,14 +260,13 @@ export class Forge {
           source: doc.source,
           reminders: JSON.stringify(doc.reminders),
           hash: sha256(fileText),
+          tags: JSON.stringify(docTags(doc.tags, doc.body)),
+          canvas: hasCanvasBlock(doc.body) ? 1 : 0,
         });
       this.db.prepare('DELETE FROM docs_fts WHERE id = ?').run(doc.id);
-      // A canvas body is a tldraw JSON blob; indexing it would pollute search
-      // with internal keys and bloat the FTS table (review L4). Index only the
-      // title for canvases.
       this.db
         .prepare('INSERT INTO docs_fts (id, title, body) VALUES (?, ?, ?)')
-        .run(doc.id, deriveTitle(doc.body), isCanvas(doc.body) ? '' : doc.body);
+        .run(doc.id, deriveTitle(doc.body), this.ftsText(doc.body));
       this.db
         .prepare('INSERT OR REPLACE INTO doc_revs (id, rev, content) VALUES (?, ?, ?)')
         .run(doc.id, rev, fileText);
@@ -263,6 +322,7 @@ export class Forge {
       archived: input.archived ?? false,
       reminders: input.reminders ?? [],
       source: input.source,
+      tags: normalizeTags(input.tags ?? []),
       body: input.body,
     };
     const relPath = existing?.path ?? docRelPath(id);
@@ -275,7 +335,8 @@ export class Forge {
   getDoc(id: string): ServerDoc | null {
     const row = this.rowById(id);
     if (!row || row.deleted === 1) return null;
-    return this.toServerDoc(row, this.bodyOf(row));
+    const head = this.headDoc(row);
+    return this.toServerDoc(row, head.body, head.tags);
   }
 
   updateDoc(id: string, input: UpdateDocBody): UpdateDocResponse | null {
@@ -292,6 +353,7 @@ export class Forge {
     if (input.pinned !== undefined) fields.pinned = input.pinned;
     if (input.archived !== undefined) fields.archived = input.archived;
     if (input.reminders !== undefined) fields.reminders = input.reminders;
+    if (input.tags !== undefined) fields.tags = normalizeTags(input.tags);
 
     const finish = (doc: Doc, merged: boolean, conflictDocId?: string): UpdateDocResponse => {
       const text = this.persist(doc, row.path);
@@ -337,6 +399,7 @@ export class Forge {
       formality: head.formality,
       importance: head.importance,
       pinned: head.pinned,
+      tags: head.tags,
     });
     const conflictDocId = 'ok' in conflict ? conflict.ok.id : undefined;
     return finish({ ...head, ...fields, body: input.body, updated: now }, true, conflictDocId);
@@ -369,17 +432,17 @@ export class Forge {
     const rows = this.db
       .prepare('SELECT * FROM docs WHERE seq > ? ORDER BY seq ASC LIMIT ?')
       .all(since, CHANGES_PAGE) as unknown as DocRow[];
-    const changes: ChangeEntry[] = rows.map((row) =>
-      row.deleted === 1
-        ? { seq: row.seq, id: row.id, rev: row.rev, deleted: true }
-        : {
-            seq: row.seq,
-            id: row.id,
-            rev: row.rev,
-            deleted: false,
-            doc: this.toServerDoc(row, this.bodyOf(row)),
-          },
-    );
+    const changes: ChangeEntry[] = rows.map((row) => {
+      if (row.deleted === 1) return { seq: row.seq, id: row.id, rev: row.rev, deleted: true };
+      const head = this.headDoc(row);
+      return {
+        seq: row.seq,
+        id: row.id,
+        rev: row.rev,
+        deleted: false,
+        doc: this.toServerDoc(row, head.body, head.tags),
+      };
+    });
     return { changes, latestSeq: currentSeq(this.db) };
   }
 

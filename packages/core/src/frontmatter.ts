@@ -1,4 +1,5 @@
 import { parse as parseYaml } from 'yaml';
+import { normalizeTags } from './tags.js';
 import {
   CAPTURE_DEFAULTS,
   DURABILITY,
@@ -30,6 +31,10 @@ export function serializeDoc(doc: Doc): string {
     `importance: ${doc.importance}`,
     `pinned: ${doc.pinned}`,
     ...(doc.archived ? ['archived: true'] : []),
+    // Always-quoted so tags like 'true' or '2026' stay strings in YAML;
+    // omitted when empty so existing files stay byte-canonical. Optional
+    // chaining: docs cached by pre-tags clients arrive without the field.
+    ...(doc.tags?.length ? [`tags: [${doc.tags.map((t) => `'${t}'`).join(', ')}]`] : []),
     `source: ${doc.source}`,
   ];
   if (doc.reminders.length > 0) {
@@ -112,6 +117,7 @@ export function parseDoc(text: string): ParsedDoc | null {
     archived: f.archived === true,
     reminders: parseReminders(f.reminders),
     source: str(f.source, 'external'),
+    tags: normalizeTags(Array.isArray(f.tags) ? f.tags.map((t) => String(t)) : []),
     body,
   };
   return { doc, canonical: serializeDoc(doc) === text };
@@ -130,6 +136,7 @@ export function docFromExternal(text: string, id: string, now: string): Doc {
     archived: false,
     reminders: [],
     source: 'external',
+    tags: [],
     body: text.endsWith('\n') ? text.slice(0, -1) : text,
   };
 }

@@ -14,7 +14,8 @@ import {
   buildAgenda,
   effectiveFireAt,
   emptyCanvasBody,
-  isCanvas,
+  hasCanvasBlock,
+  isLegacyCanvas,
   nowIso,
 } from '@forge/core';
 import { Component, type JSX, type ReactNode, Suspense, lazy, useEffect, useRef, useState } from 'react';
@@ -32,6 +33,10 @@ import {
 } from './store';
 
 const LazyCanvasEditor = lazy(() => import('./editor/CanvasEditor'));
+
+/** True when a note carries a drawing — a canvas block, or a legacy
+ * whole-note canvas that a not-yet-migrated server may still sync down. */
+const noteHasCanvas = (body: string): boolean => hasCanvasBlock(body) || isLegacyCanvas(body);
 
 /** ISO instant -> value for a <input type=datetime-local> in local time. */
 function isoToLocalInput(iso: string): string {
@@ -654,7 +659,7 @@ function cardKind(doc: ServerDoc, canvas: boolean, hasReminder: boolean): IconNa
 }
 
 export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }) {
-  const canvas = isCanvas(doc.body);
+  const canvas = noteHasCanvas(doc.body);
   const reminder = doc.reminders.find((r) => r.status !== 'done');
   const overdue = reminder ? new Date(effectiveFireAt(reminder)).getTime() < Date.now() : false;
   const kind = cardKind(doc, canvas, !!reminder);
@@ -1226,7 +1231,7 @@ export function EditorPanel({
   });
   const [busy, setBusy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const canvas = isCanvas(doc.body);
+  const canvas = noteHasCanvas(doc.body);
   const [editorMode, setEditorMode] = useState<'rich' | 'raw'>(() =>
     localStorage.getItem('forge-editor-mode') === 'raw' ? 'raw' : 'rich',
   );

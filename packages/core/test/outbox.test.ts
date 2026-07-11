@@ -51,6 +51,7 @@ const serverDoc = (id: string, rev: number, body: string): ServerDoc => ({
   archived: false,
   reminders: [],
   source: 'test',
+  tags: [],
   body,
   rev,
   title: body,

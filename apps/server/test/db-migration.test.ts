@@ -104,3 +104,33 @@ describe('boot re-derivation of stored titles', () => {
     expect(rowAgain.seq).toBe(seqAfter.seq);
   });
 });
+
+/** Legacy whole-note canvases (marker + JSON body) become ordinary markdown
+ * notes holding one canvas block. The FILE changes, so this is a real write —
+ * rev and seq bump, git records it — but `updated` must not move or the
+ * migration would shuffle every canvas to the top of the recency order. */
+describe('legacy canvas body migration', () => {
+  it('rewrites marker bodies to canvas blocks once, keeping updated', async () => {
+    const dataDir = join(mkdtempSync(join(tmpdir(), 'forge-canvasmig-')), 'data');
+    const { forge } = await createForgeApp({ dataDir, gitQuietMs: 600_000 });
+    const legacyBody = '<!-- forge:canvas v1 -->\n{"shapes":{"a":1}}';
+    const created = forge.createDoc({ body: legacyBody, source: 'test' });
+    if (!('ok' in created)) throw new Error('create failed');
+    const { id, updated, rev } = created.ok;
+
+    // Simulate a data dir from before the block format existed.
+    forge.db.prepare("DELETE FROM kv WHERE key = 'canvas_block_version'").run();
+
+    const reopened = new Forge(dataDir, { gitQuietMs: 600_000 });
+    const doc = reopened.getDoc(id);
+    expect(doc?.body).toBe('```forge-canvas v1\n{"shapes":{"a":1}}\n```');
+    expect(doc?.updated).toBe(updated);
+    expect(doc?.rev).toBeGreaterThan(rev);
+    expect(doc?.title).toBe('Canvas');
+
+    // Second boot is a no-op: nothing legacy remains.
+    const revAfter = reopened.getDoc(id)?.rev;
+    const again = new Forge(dataDir, { gitQuietMs: 600_000 });
+    expect(again.getDoc(id)?.rev).toBe(revAfter);
+  });
+});

@@ -13,6 +13,7 @@ const baseDoc = (over: Partial<Doc> = {}): Doc => ({
   archived: false,
   reminders: [],
   source: 'web',
+  tags: [],
   body: 'Hello world',
   ...over,
 });
@@ -55,6 +56,8 @@ function randomDoc(rnd: () => number): Doc {
     });
   }
   const lines = Array.from({ length: Math.floor(rnd() * 8) }, () => pickFrom(LINE_POOL));
+  const TAG_POOL = ['home', 'plants', 'true', '2026', 'a-b_c', 'café'];
+  const tags = [...new Set(Array.from({ length: Math.floor(rnd() * 4) }, () => pickFrom(TAG_POOL)))];
   return baseDoc({
     durability: pickFrom(DURABILITY),
     formality: pickFrom(FORMALITY),
@@ -63,6 +66,7 @@ function randomDoc(rnd: () => number): Doc {
     archived: rnd() > 0.7,
     reminders,
     source: pickFrom(['web', 'menubar', 'android-widget', 'api:claude', 'import:keep']),
+    tags,
     body: lines.join('\n'),
   });
 }
@@ -91,6 +95,25 @@ describe('frontmatter roundtrip', () => {
   it('is not confused by --- lines inside the body', () => {
     const doc = baseDoc({ body: 'above\n---\nbelow' });
     expect(parseDoc(serializeDoc(doc))?.doc.body).toBe('above\n---\nbelow');
+  });
+
+  it('omits the tags line entirely when empty — existing files must not churn', () => {
+    expect(serializeDoc(baseDoc())).not.toContain('tags:');
+  });
+
+  it('keeps YAML-hostile tags as strings via quoting', () => {
+    const doc = baseDoc({ tags: ['true', 'no', '2026', 'null'] });
+    const parsed = parseDoc(serializeDoc(doc));
+    expect(parsed?.doc.tags).toEqual(['true', 'no', '2026', 'null']);
+    expect(parsed?.canonical).toBe(true);
+  });
+
+  it('heals hand-written unquoted tags to canonical form', () => {
+    const parsed = parseDoc(
+      '---\nid: 01J1QG8Z3WABCDEFGHJKMNPQRS\ntags: [Home, plants]\n---\nhi\n',
+    );
+    expect(parsed?.doc.tags).toEqual(['home', 'plants']);
+    expect(parsed?.canonical).toBe(false);
   });
 });
 

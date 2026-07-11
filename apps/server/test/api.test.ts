@@ -197,6 +197,7 @@ describe('external edits', () => {
         pinned: false,
         reminders: [],
         source: 'api:claude',
+        tags: [],
         body: '# Dropped in\nby an external agent',
       }),
     );
@@ -471,5 +472,60 @@ describe('canvas bodies over the wire', () => {
       body: JSON.stringify({ id: doc.id, body: canvasBody, source: 'test' }),
     });
     expect(retry.status).toBe(201);
+  });
+
+  it('serves canvas-block bodies whole and titles from the surrounding prose', async () => {
+    const fa = await makeApp();
+    const body = '# Sketch\n```forge-canvas v1\n{"shapes":{"a":1}}\n```\nnotes under it';
+    const doc = await create(fa, body);
+    expect(doc.title).toBe('Sketch');
+    expect(doc.preview).toBe('notes under it');
+
+    const got = (await (await fa.app.request(`/api/docs/${doc.id}`)).json()) as ServerDoc;
+    expect(got.body).toBe(body);
+
+    // Prose around the block is searchable; tldraw internals are not.
+    const prose = await (await fa.app.request('/api/search?q=notes')).json();
+    expect(prose.results.map((r: { id: string }) => r.id)).toContain(doc.id);
+    const internals = await (await fa.app.request('/api/search?q=shapes')).json();
+    expect(internals.results.map((r: { id: string }) => r.id)).not.toContain(doc.id);
+  });
+});
+
+describe('tags over the API', () => {
+  it('stores normalized frontmatter tags and returns them faithfully', async () => {
+    const fa = await makeApp();
+    const doc = await create(fa, 'water the plants', { tags: ['#Home', 'plants', 'HOME'] });
+    expect(doc.tags).toEqual(['home', 'plants']);
+
+    const file = readFileSync(join(fa.forge.dataDir, docRelPath(doc.id)), 'utf8');
+    expect(file).toContain("tags: ['home', 'plants']");
+
+    const upd = await update(fa, doc.id, { baseRev: 1, tags: ['garden'] });
+    expect(upd.body.doc.tags).toEqual(['garden']);
+
+    const got = (await (await fa.app.request(`/api/docs/${doc.id}`)).json()) as ServerDoc;
+    expect(got.tags).toEqual(['garden']);
+  });
+
+  it('indexes the union of frontmatter tags and body #tags', async () => {
+    const fa = await makeApp();
+    const doc = await create(fa, 'remember to #water them', { tags: ['plants'] });
+    const row = fa.forge.db
+      .prepare('SELECT tags FROM docs WHERE id = ?')
+      .get(doc.id) as unknown as { tags: string };
+    expect(JSON.parse(row.tags)).toEqual(['plants', 'water']);
+    // Frontmatter stays explicit-only: body tags are derived, not written back.
+    expect(doc.tags).toEqual(['plants']);
+  });
+
+  it('rejects malformed tags', async () => {
+    const fa = await makeApp();
+    const res = await fa.app.request('/api/docs', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ body: 'x', source: 'test', tags: 'not-an-array' }),
+    });
+    expect(res.status).toBe(400);
   });
 });

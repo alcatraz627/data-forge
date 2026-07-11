@@ -7,8 +7,9 @@ import {
   IMPORTANCE,
   type Reminder,
   type UpdateDocBody,
-  isCanvas,
+  hasCanvasBlock,
   isDocId,
+  isLegacyCanvas,
 } from '@forge/core';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -33,7 +34,7 @@ const MAX_ATTACHMENT = 15_000_000;
 const SOURCE_RE = /^[\w.:@-]{1,64}$/;
 
 const bodyTooLarge = (body: string): boolean =>
-  body.length > (isCanvas(body) ? MAX_CANVAS_BODY : MAX_BODY);
+  body.length > (hasCanvasBlock(body) || isLegacyCanvas(body) ? MAX_CANVAS_BODY : MAX_BODY);
 
 const ATTACHMENT_TYPES: Record<string, string> = {
   png: 'image/png',
@@ -76,6 +77,13 @@ function validReminders(v: unknown): Reminder[] | null {
   return out;
 }
 
+/** Shape check only — tag normalization (case, charset) happens in Forge. */
+function validTags(v: unknown): string[] | null {
+  if (!Array.isArray(v) || v.length > 50) return null;
+  if (!v.every((t) => typeof t === 'string' && t.length <= 80)) return null;
+  return v as string[];
+}
+
 type Validated<T> = { ok: T } | { error: string };
 
 function axisErrors(f: Record<string, unknown>): string | null {
@@ -101,6 +109,8 @@ function parseCreate(raw: unknown): Validated<CreateDocBody> {
   if (axisErr) return { error: axisErr };
   const reminders = validReminders(f.reminders);
   if (reminders === null) return { error: 'bad reminders' };
+  const tags = f.tags !== undefined ? validTags(f.tags) : [];
+  if (tags === null) return { error: 'bad tags' };
   return {
     ok: {
       ...(f.id !== undefined ? { id: f.id as string } : {}),
@@ -114,6 +124,7 @@ function parseCreate(raw: unknown): Validated<CreateDocBody> {
       ...(f.pinned !== undefined ? { pinned: f.pinned as boolean } : {}),
       ...(f.archived !== undefined ? { archived: f.archived as boolean } : {}),
       ...(f.reminders !== undefined ? { reminders } : {}),
+      ...(f.tags !== undefined ? { tags } : {}),
     },
   };
 }
@@ -129,6 +140,8 @@ function parseUpdate(raw: unknown): Validated<UpdateDocBody> {
   if (axisErr) return { error: axisErr };
   const reminders = f.reminders !== undefined ? validReminders(f.reminders) : [];
   if (reminders === null) return { error: 'bad reminders' };
+  const tags = f.tags !== undefined ? validTags(f.tags) : [];
+  if (tags === null) return { error: 'bad tags' };
   const out: UpdateDocBody = { baseRev: f.baseRev };
   if (f.body !== undefined) out.body = f.body as string;
   if (f.durability !== undefined) out.durability = f.durability as never;
@@ -137,6 +150,7 @@ function parseUpdate(raw: unknown): Validated<UpdateDocBody> {
   if (f.pinned !== undefined) out.pinned = f.pinned as boolean;
   if (f.archived !== undefined) out.archived = f.archived as boolean;
   if (f.reminders !== undefined) out.reminders = reminders;
+  if (f.tags !== undefined) out.tags = tags;
   if (Object.keys(out).length === 1) return { error: 'no fields to update' };
   return { ok: out };
 }

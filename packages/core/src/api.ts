@@ -52,6 +52,7 @@ export interface CreateDocBody {
   pinned?: boolean;
   archived?: boolean;
   reminders?: Reminder[];
+  tags?: string[];
   source: string;
 }
 
@@ -65,6 +66,7 @@ export interface UpdateDocBody {
   pinned?: boolean;
   archived?: boolean;
   reminders?: Reminder[];
+  tags?: string[];
 }
 
 export interface UpdateDocResponse {

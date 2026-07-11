@@ -114,7 +114,8 @@ Data lives in its own repo (ADR-0005):
 ```
 ~/DataForge/                     ← its own git repo, private remote
   notes/2026/07/01J1QG8Z3W.md    ← ULID filenames (time-sortable, never renamed)
-  boards/….tldr.json             ← canvas docs (M5)
+                                    (canvases live INSIDE notes as fenced
+                                     blocks — ADR-0006; no boards/ dir)
   attachments/<sha256>.<ext>     ← images/files, content-addressed (M4)
   meta/
     settings.json                ← saved views, axis defaults (synced via git)
