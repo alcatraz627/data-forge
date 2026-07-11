@@ -1,3 +1,30 @@
+## session: TEMPERED §6 one-data-kind + tags [forge-ux-b4] — 2026-07-11
+
+Purpose: resume forge-ux-7e — deploy TEMPERED to :5040, then build §6 (canvas
+blocks + tags).
+
+Insights:
+- Deployed M8a to live :5040 (new PID verified in-browser; SW needs the usual
+  double-reload). Push of the now-13 commits still waits on the user's
+  sentinel one-liner.
+- Canvas notes retired as a TYPE: now `forge-canvas v1` fenced blocks inside
+  markdown (ADR-0006). Migration converts at BOOT (kv-stamped, keeps `updated`
+  so recency doesn't shuffle) AND at every door (create/update/ingest) — a
+  boot sweep alone leaks files that arrive after its stamp.
+- tiptap useEditor captures options ONCE — an onChange that closes over
+  per-render state (segment layouts) must route through a ref or edits
+  reassemble against a stale body.
+- tldraw onMount may return a cleanup fn — used to flush the 500ms write-back
+  debounce on unmount, killing the draw→back→type prose-clobber race (same
+  family as M7b).
+- YAML frontmatter lists need always-quoting: bare true/no/2026 parse as
+  scalars and vanish from string lists. tags: is omitted-when-empty or the
+  whole corpus churns non-canonical.
+- filterDocs scope semantics: a narrowing scope with an empty query lists its
+  population (Canvas → all drawings) — scope chips double as filters.
+
+---
+
 ## session: M7 design round + build [forge-ux-7e] — 2026-07-10
 
 Purpose: full design round on user request — designer review by aspect, magi
