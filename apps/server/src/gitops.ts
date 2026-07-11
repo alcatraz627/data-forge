@@ -19,7 +19,18 @@ export async function pushBackup(dir: string, remote: string): Promise<'pushed' 
     await git(dir, 'push', remote, 'HEAD:main');
     return 'pushed';
   } catch (e) {
-    console.error('backup push failed (will retry):', (e as Error).message.split('\n')[0]);
+    // git puts the actionable reason (403, non-fast-forward, auth prompt) on
+    // stderr — the exec Error's first line only says "Command failed", which
+    // hid a scope problem for days. Log the reason, not the wrapper.
+    const err = e as Error & { stderr?: string };
+    const reason =
+      err.stderr
+        ?.split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .slice(-2)
+        .join(' · ') || err.message.split('\n')[0];
+    console.error('backup push failed (will retry):', reason);
     return 'fail';
   }
 }
