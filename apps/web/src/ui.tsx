@@ -13,21 +13,24 @@ import {
   type ViewDef,
   buildAgenda,
   effectiveFireAt,
+  docTags,
   emptyCanvasBody,
   hasCanvasBlock,
   isLegacyCanvas,
   listCanvasBlocks,
   migrateLegacyCanvas,
+  normalizeTags,
   nowIso,
   stripCanvasBlocks,
 } from '@forge/core';
-import { Component, type JSX, type ReactNode, Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { Component, type JSX, type ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api';
 import { MOBILE_MEDIA_QUERY } from './breakpoint';
 import { NoteEditor } from './editor/NoteEditor';
 import { Icon, type IconName } from './icons';
 import {
   actOnReminder,
+  allTags,
   captureNote,
   flashNotice,
   removeDoc,
@@ -661,7 +664,17 @@ function cardKind(doc: ServerDoc, canvas: boolean, hasReminder: boolean): IconNa
   return null;
 }
 
-export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }) {
+export function NoteCard({
+  doc,
+  onOpen,
+  onTag,
+}: {
+  doc: ServerDoc;
+  onOpen: () => void;
+  /** Tapping a #tag chip filters by that tag (spec §5); chips render inert
+   * when the surface has nowhere to send the filter. */
+  onTag?: (tag: string) => void;
+}) {
   const canvas = noteHasCanvas(doc.body);
   const reminder = doc.reminders.find((r) => r.status !== 'done');
   const overdue = reminder ? new Date(effectiveFireAt(reminder)).getTime() < Date.now() : false;
@@ -669,6 +682,7 @@ export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }
   const durDev = !canvas && doc.durability !== CAPTURE_DEFAULTS.durability;
   const formDev = !canvas && doc.formality !== CAPTURE_DEFAULTS.formality;
   const impMark = doc.importance === 'high' || doc.importance === 'critical';
+  const tags = docTags(doc.tags ?? [], doc.body);
   const hasMeta =
     !!reminder ||
     impMark ||
@@ -676,6 +690,7 @@ export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }
     formDev ||
     doc.pinned ||
     canvas ||
+    tags.length > 0 ||
     doc.source.startsWith('conflict:') ||
     doc.rev === 0;
   // A div with button semantics, not a <button>: the quick-action menu nests
@@ -753,6 +768,22 @@ export function NoteCard({ doc, onOpen }: { doc: ServerDoc; onOpen: () => void }
           )}
           {doc.pinned && <span className="mark">▲ PINNED</span>}
           {canvas && <span className="mark">▨ CANVAS</span>}
+          {tags.slice(0, 3).map((t) => (
+            <button
+              key={t}
+              type="button"
+              className="tag-chip"
+              disabled={!onTag}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTag?.(t);
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              #{t}
+            </button>
+          ))}
+          {tags.length > 3 && <span className="mark">+{tags.length - 3}</span>}
           {doc.source.startsWith('conflict:') && (
             <span className="mark mark-imp" data-value="critical">
               ◆ CONFLICT
@@ -1202,6 +1233,70 @@ class CanvasErrorBoundary extends Component<{ children: ReactNode }, { failed: b
   }
 }
 
+/** The editor's TAGS row: current tags as removable chips plus a dashed
+ * + Tag control (dashed = it creates something) with most-used suggestions. */
+function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
+  const suggestions = useMemo(
+    () => allTags().filter((t) => !tags.includes(t)).slice(0, 8),
+    [tags],
+  );
+  const commit = (): void => {
+    if (draft.trim()) onChange(normalizeTags([...tags, draft]));
+    setDraft('');
+    setAdding(false);
+  };
+  return (
+    <div className="tag-editor">
+      {tags.map((t) => (
+        <span key={t} className="tag-chip tag-chip-set">
+          #{t}
+          <button
+            type="button"
+            className="tag-remove"
+            title={`Remove ${t}`}
+            onClick={() => onChange(tags.filter((x) => x !== t))}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      {adding ? (
+        <>
+          <input
+            className="tag-input"
+            list="tag-suggestions"
+            value={draft}
+            autoFocus
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                commit();
+              }
+              if (e.key === 'Escape') {
+                setDraft('');
+                setAdding(false);
+              }
+            }}
+          />
+          <datalist id="tag-suggestions">
+            {suggestions.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
+        </>
+      ) : (
+        <button type="button" className="tag-add" onClick={() => setAdding(true)}>
+          + Tag
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function EditorPanel({
   doc,
   onClose,
@@ -1227,12 +1322,14 @@ export function EditorPanel({
   // on top of our own acked edit merges cleanly (ours is a subset of theirs).
   const [baseRev, setBaseRev] = useState(doc.rev);
   const [reminders, setReminders] = useState<Reminder[]>(doc.reminders);
+  const [tags, setTags] = useState<string[]>(doc.tags ?? []);
   const [saved, setSaved] = useState({
     body: doc.body,
     durability: doc.durability,
     formality: doc.formality,
     importance: doc.importance,
     reminders: JSON.stringify(doc.reminders),
+    tags: JSON.stringify(doc.tags ?? []),
   });
   const [busy, setBusy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -1260,7 +1357,8 @@ export function EditorPanel({
     axes.durability !== saved.durability ||
     axes.formality !== saved.formality ||
     axes.importance !== saved.importance ||
-    JSON.stringify(reminders) !== saved.reminders;
+    JSON.stringify(reminders) !== saved.reminders ||
+    JSON.stringify(tags) !== saved.tags;
 
   const toggleMode = (): void => {
     const next = editorMode === 'rich' ? 'raw' : 'rich';
@@ -1272,9 +1370,9 @@ export function EditorPanel({
     if (!dirty || busy) return;
     setBusy(true);
     try {
-      const newRev = await saveDoc(doc.id, baseRev, { body, ...axes, reminders });
+      const newRev = await saveDoc(doc.id, baseRev, { body, ...axes, reminders, tags });
       setBaseRev(newRev);
-      setSaved({ body, ...axes, reminders: JSON.stringify(reminders) });
+      setSaved({ body, ...axes, reminders: JSON.stringify(reminders), tags: JSON.stringify(tags) });
     } catch (e) {
       flashNotice(e instanceof Error ? `Save failed: ${e.message}` : 'Save failed');
     } finally {
@@ -1307,7 +1405,7 @@ export function EditorPanel({
     // "Discard unsaved edits?" gauntlet. saveDoc directly, not save(): the
     // busy gate must not drop keystrokes typed while a save was in flight —
     // the outbox coalesces the second enqueue.
-    if (dirty) void saveDoc(doc.id, baseRev, { body, ...axes, reminders });
+    if (dirty) void saveDoc(doc.id, baseRev, { body, ...axes, reminders, tags });
     onClose();
   };
 
@@ -1333,7 +1431,7 @@ export function EditorPanel({
   // Archive applies and closes; it carries the current edits along so
   // archiving mid-edit never discards typed text.
   const toggleArchive = async (): Promise<void> => {
-    await saveDoc(doc.id, baseRev, { body, ...axes, reminders, archived: !doc.archived });
+    await saveDoc(doc.id, baseRev, { body, ...axes, reminders, tags, archived: !doc.archived });
     flashNotice(doc.archived ? 'Note restored' : 'Archived — it lives on in the Archive view');
     onClose();
   };
@@ -1434,6 +1532,12 @@ export function EditorPanel({
         )}
         {!inCanvas && (
           <div className="editor-section">
+            <span className="section-label">Tags</span>
+            <TagEditor tags={tags} onChange={setTags} />
+          </div>
+        )}
+        {!inCanvas && (
+          <div className="editor-section">
             <span className="section-label">Reminders</span>
             <ReminderEditor reminders={reminders} onChange={setReminders} />
           </div>
@@ -1474,6 +1578,7 @@ export function EditorPanel({
                           importance: saved.importance,
                         });
                         setReminders(JSON.parse(saved.reminders));
+                        setTags(JSON.parse(saved.tags));
                       },
                     },
                   ]

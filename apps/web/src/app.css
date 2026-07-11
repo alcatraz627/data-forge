@@ -715,6 +715,83 @@ textarea.raw-editor:focus {
   color: var(--time-dim);
 }
 
+/* #tag chips: solid hairline (a readout you can tap to filter, not an
+   edit-in-place surface), mono like the rest of the meta row. */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 26px;
+  padding: 1px var(--space-2);
+  background: transparent;
+  border: 1px solid var(--hairline-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tag-chip:disabled {
+  cursor: default;
+}
+
+.tag-chip:not(:disabled):active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+/* Editor TAGS row: set chips carry a remove ×; + Tag is dashed because it
+   creates something (the app-wide dashed convention). */
+.tag-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.tag-chip-set {
+  color: var(--text);
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.tag-add {
+  min-height: 26px;
+  padding: 1px var(--space-2);
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tag-input {
+  min-height: 26px;
+  width: 10ch;
+  padding: 1px var(--space-2);
+  background: transparent;
+  border: 1px dashed var(--accent-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  outline: none;
+}
+
 /* Dashed = tap-to-reschedule. Ember scheduled, hot overdue. */
 .chip-reminder {
   min-height: 26px;

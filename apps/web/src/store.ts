@@ -8,11 +8,14 @@ import {
   completeReminder,
   derivePreview,
   deriveTitle,
+  docTags,
   drainOutbox,
   emptyCanvasBody,
   enqueueCreate,
   enqueueDelete,
   enqueueUpdate,
+  hasCanvasBlock,
+  isLegacyCanvas,
   newId,
   nowIso,
   pullToHead,
@@ -374,14 +377,48 @@ export async function removeDocUndoable(id: string): Promise<void> {
   });
 }
 
+/** Search scopes, spec §8: everything · titles only · tags · canvas notes. */
+export type SearchScope = 'all' | 'title' | 'tag' | 'canvas';
+
 /** Instant local filter over the fully-synced corpus. Server FTS exists for
- * agents and heavier ranking; interactive search must never wait on a wire. */
-export function filterDocs(docs: ServerDoc[], query: string): ServerDoc[] {
+ * agents and heavier ranking; interactive search must never wait on a wire.
+ * With an empty query, a narrowing scope lists its whole population (all
+ * canvas notes, all tagged notes) — the scope chip is a filter in itself. */
+export function filterDocs(docs: ServerDoc[], query: string, scope: SearchScope = 'all'): ServerDoc[] {
   const q = query.trim().toLowerCase();
-  if (!q) return docs;
+  const pool =
+    scope === 'canvas'
+      ? docs.filter((d) => hasCanvasBlock(d.body) || isLegacyCanvas(d.body))
+      : docs;
+  if (!q) {
+    if (scope === 'tag') return pool.filter((d) => docTags(d.tags ?? [], d.body).length > 0);
+    return pool;
+  }
   const terms = q.split(/\s+/);
-  return docs.filter((d) => {
-    const hay = `${d.title}\n${d.body}`.toLowerCase();
+  if (scope === 'tag') {
+    return pool.filter((d) => {
+      const tags = docTags(d.tags ?? [], d.body);
+      return terms.every((t) => {
+        const needle = t.replace(/^#/, '');
+        return tags.some((tag) => tag.includes(needle));
+      });
+    });
+  }
+  return pool.filter((d) => {
+    const hay =
+      scope === 'title'
+        ? d.title.toLowerCase()
+        : `${d.title}\n${d.body}\n${(d.tags ?? []).join(' ')}`.toLowerCase();
     return terms.every((t) => hay.includes(t));
   });
+}
+
+/** Every tag in the corpus, most-used first — feeds the editor's + Tag
+ * suggestions. (`?? []`: docs cached by pre-tags builds lack the field.) */
+export function allTags(): string[] {
+  const freq = new Map<string, number>();
+  for (const d of byId.values()) {
+    for (const t of docTags(d.tags ?? [], d.body)) freq.set(t, (freq.get(t) ?? 0) + 1);
+  }
+  return [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
 }

@@ -15,7 +15,7 @@ import {
   useIsMobile,
 } from './ui';
 import { Icon } from './icons';
-import { captureCanvas, filterDocs, startSync, useForge } from './store';
+import { type SearchScope, captureCanvas, filterDocs, startSync, useForge } from './store';
 
 /** dark | light | system. `system` removes the data-theme attribute so the
  * stylesheet's prefers-color-scheme branch decides. */
@@ -41,12 +41,19 @@ export type DensityPref = 'compact' | 'relaxed';
 
 const ALL_VIEW: ViewDef = { id: 'all', name: 'All', filter: {} };
 const LIST_DENSITIES: ListDensity[] = ['skim', 'list', 'cards'];
+const SEARCH_SCOPES: Array<{ id: SearchScope; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'title', label: 'Titles' },
+  { id: 'tag', label: 'Tags' },
+  { id: 'canvas', label: 'Canvas' },
+];
 
 export default function App() {
   const [themeMode, setThemeMode] = useThemeMode();
   const snap = useForge();
   const isMobile = useIsMobile();
   const [query, setQuery] = useState('');
+  const [searchScope, setSearchScope] = useState<SearchScope>('all');
   const [viewId, setViewId] = useState('all');
   const [screen, setScreen] = useState<MobileScreen>('notes');
   const [agendaMode, setAgendaMode] = useState(false);
@@ -138,9 +145,13 @@ export default function App() {
     [snap.docs, activeView],
   );
   // Search always spans everything; the view scopes only the browse stream.
+  // A narrowing scope chip counts as searching even before a query is typed
+  // (Canvas lists every drawing, Tags lists every tagged note).
+  const searching =
+    query.trim() !== '' || (isMobile && screen === 'search' && searchScope !== 'all');
   const docs = useMemo(
-    () => (query.trim() ? filterDocs(snap.docs, query) : viewDocs),
-    [snap.docs, viewDocs, query],
+    () => (searching ? filterDocs(snap.docs, query, searchScope) : viewDocs),
+    [snap.docs, viewDocs, query, searching, searchScope],
   );
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -166,6 +177,16 @@ export default function App() {
     const next =
       LIST_DENSITIES[(LIST_DENSITIES.indexOf(listDensity) + 1) % LIST_DENSITIES.length] ?? 'list';
     setListDensity(next);
+  };
+
+  // Card #tag chips land here: mobile jumps to Search in the Tags scope;
+  // desktop just queries (tags are in the search haystack).
+  const openTagSearch = (tag: string): void => {
+    setQuery(tag);
+    if (isMobile) {
+      setScreen('search');
+      setSearchScope('tag');
+    }
   };
 
   return (
@@ -218,7 +239,7 @@ export default function App() {
           />
         )}
         {showActions && <ActionsPage />}
-        {showStream && isMobile && screen === 'search' && !query.trim() ? (
+        {showStream && isMobile && screen === 'search' && !searching ? (
           // Pre-query search is a launchpad (pinned + recent), not a clone of
           // the Notes list — the two tabs stop showing identical content.
           <section className="stream search-start">
@@ -231,7 +252,7 @@ export default function App() {
                   .filter((d) => d.pinned && matchesView(d, ALL_VIEW))
                   .slice(0, 3)
                   .map((d) => (
-                    <NoteCard key={d.id} doc={d} onOpen={() => setOpenDoc(d)} />
+                    <NoteCard key={d.id} doc={d} onOpen={() => setOpenDoc(d)} onTag={openTagSearch} />
                   ))}
               </>
             )}
@@ -242,7 +263,7 @@ export default function App() {
               .filter((d) => !d.pinned && matchesView(d, ALL_VIEW))
               .slice(0, 4)
               .map((d) => (
-                <NoteCard key={d.id} doc={d} onOpen={() => setOpenDoc(d)} />
+                <NoteCard key={d.id} doc={d} onOpen={() => setOpenDoc(d)} onTag={openTagSearch} />
               ))}
             <p className="search-hint">Type above to search everything.</p>
           </section>
@@ -277,7 +298,7 @@ export default function App() {
                 )}
               </div>
             ) : (
-              docs.map((d) => <NoteCard key={d.id} doc={d} onOpen={() => setOpenDoc(d)} />)
+              docs.map((d) => <NoteCard key={d.id} doc={d} onOpen={() => setOpenDoc(d)} onTag={openTagSearch} />)
             )}
           </section>
         ) : null}
@@ -297,6 +318,23 @@ export default function App() {
           >
             {listDensity === 'skim' ? 'Skim' : listDensity === 'list' ? 'List' : 'Cards'}
           </button>
+        </div>
+      )}
+
+      {isMobile && screen === 'search' && (
+        <div className="page-bar">
+          <div className="view-chips">
+            {SEARCH_SCOPES.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={`view-chip${searchScope === s.id ? ' chip-active' : ''}`}
+                onClick={() => setSearchScope(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
