@@ -350,6 +350,16 @@ textarea.raw-editor:focus {
   padding-top: var(--space-3);
 }
 
+/* Saved moment: the button speaks in the ok voice for 900ms (motion #3).
+   Disabled styling must not wash it out — saved is a state, not a lockout. */
+.primary[data-saved='true'],
+.primary[data-saved='true']:disabled {
+  background: var(--ok-surface);
+  border-color: var(--ok);
+  color: var(--ok);
+  opacity: 1;
+}
+
 /* The mobile capture foot rides the fixed page-bar slot; axes stay the
    flexible half, Save keeps its full tap size at the thumb edge. */
 .capture-bar {

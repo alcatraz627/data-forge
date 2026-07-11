@@ -582,12 +582,29 @@ export function AxisDisclosure({
   );
 }
 
+/** The saved-moment flash (spec motion #3): the save button reads "● Saved"
+ * in the ok voice for 900ms, then returns to rest. */
+function useSavedFlash(): { on: boolean; flash: () => void } {
+  const [on, setOn] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return {
+    on,
+    flash: () => {
+      setOn(true);
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setOn(false), 900);
+    },
+  };
+}
+
 /** The drop-a-thought box. Drafts persist across reloads so a half-typed
  * thought is never lost to a stray tab close. */
 export function Capture({ onSaved, onCanvas }: { onSaved?: () => void; onCanvas?: () => void }) {
   const [text, setText] = useState(() => localStorage.getItem('forge-draft') ?? '');
   const [axes, setAxes] = useState<AxisValues>({ ...CAPTURE_DEFAULTS });
   const [busy, setBusy] = useState(false);
+  const justSaved = useSavedFlash();
   const ref = useRef<HTMLTextAreaElement>(null);
   const mobile = useIsMobile();
 
@@ -602,6 +619,7 @@ export function Capture({ onSaved, onCanvas }: { onSaved?: () => void; onCanvas?
     setBusy(true);
     try {
       await captureNote({ body, ...axes });
+      justSaved.flash();
       setText('');
       // Cleared directly, not via the persistence effect: a save that
       // unmounts this component (mobile screen switch) would otherwise leave
@@ -642,10 +660,11 @@ export function Capture({ onSaved, onCanvas }: { onSaved?: () => void; onCanvas?
         <button
           type="button"
           className="primary"
-          disabled={!text.trim() || busy}
+          data-saved={justSaved.on}
+          disabled={(!text.trim() && !justSaved.on) || busy}
           onClick={() => void save()}
         >
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? 'Saving…' : justSaved.on ? '● Saved' : 'Save'}
         </button>
       </div>
       {onCanvas && (
@@ -1568,6 +1587,7 @@ export function EditorPanel({
     tags: JSON.stringify(doc.tags ?? []),
   });
   const [busy, setBusy] = useState(false);
+  const justSaved = useSavedFlash();
   const [showHistory, setShowHistory] = useState(false);
   const [editorMode, setEditorMode] = useState<'rich' | 'raw'>(() =>
     localStorage.getItem('forge-editor-mode') === 'raw' ? 'raw' : 'rich',
@@ -1609,6 +1629,7 @@ export function EditorPanel({
       const newRev = await saveDoc(doc.id, baseRev, { body, ...axes, reminders, tags });
       setBaseRev(newRev);
       setSaved({ body, ...axes, reminders: JSON.stringify(reminders), tags: JSON.stringify(tags) });
+      justSaved.flash();
     } catch (e) {
       flashNotice(e instanceof Error ? `Save failed: ${e.message}` : 'Save failed');
     } finally {
@@ -1844,11 +1865,12 @@ export function EditorPanel({
           <button
             type="button"
             className="primary"
-            disabled={!dirty || busy}
+            data-saved={justSaved.on}
+            disabled={(!dirty && !justSaved.on) || busy}
             onClick={() => void save()}
           >
-            <Icon name="check" />
-            {busy ? 'Saving…' : 'Save'}
+            {!justSaved.on && <Icon name="check" />}
+            {busy ? 'Saving…' : justSaved.on ? '● Saved' : 'Save'}
           </button>
         </div>
         )}
