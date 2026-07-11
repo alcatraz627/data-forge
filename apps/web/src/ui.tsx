@@ -415,10 +415,12 @@ function ActionMenu({
   title,
   items,
   up = false,
+  icon = 'more',
 }: {
   title: string;
   items: MenuItem[];
   up?: boolean;
+  icon?: IconName;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -446,7 +448,7 @@ function ActionMenu({
         }}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <Icon name="more" />
+        <Icon name={icon} />
       </button>
       {open && (
         <div className={`menu${up ? ' menu-up' : ''}`} role="menu">
@@ -986,20 +988,23 @@ export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: strin
                 <button type="button" className="agenda-main" onClick={() => onOpen(e.docId)}>
                   <span className="agenda-title">{e.title}</span>
                   <span className={`agenda-when${e.overdue ? ' overdue' : ''}`}>
-                    {reminderLabel(e.at)}
+                    {e.overdue ? latenessLabel(e.at, now) : reminderLabel(e.at)}
                     {e.recurring && <Icon name="history" />}
                     {e.snoozed && <Icon name="snooze" />}
                   </span>
                 </button>
                 <div className="agenda-actions">
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    title="Snooze to tomorrow"
-                    onClick={() => void act(e, 'snooze', new Date(Date.now() + 24 * 3_600_000))}
-                  >
-                    <Icon name="snooze" />
-                  </button>
+                  {/* The same snooze presets as everywhere else — a single
+                      fixed "tomorrow" hid what the tap would actually do. */}
+                  <ActionMenu
+                    title="Snooze"
+                    icon="snooze"
+                    items={reminderPresets(now).map((p) => ({
+                      icon: 'snooze' as IconName,
+                      label: p.label,
+                      onPick: () => void act(e, 'snooze', p.at),
+                    }))}
+                  />
                 </div>
               </div>
             ))}
@@ -1076,6 +1081,17 @@ function HistoryPanel({
       )}
     </div>
   );
+}
+
+/** How late an overdue reminder is, in the plainest words that fit a chip —
+ * pressure should be readable without date math. */
+function latenessLabel(atIso: string, now: Date): string {
+  const ms = now.getTime() - new Date(atIso).getTime();
+  const days = Math.floor(ms / 86_400_000);
+  if (days >= 1) return `${days} DAY${days === 1 ? '' : 'S'} LATE`;
+  const hours = Math.floor(ms / 3_600_000);
+  if (hours >= 1) return `${hours}H LATE`;
+  return 'JUST NOW';
 }
 
 /** Natural starting points for a new reminder, so the common cases are one

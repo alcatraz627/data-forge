@@ -1730,7 +1730,9 @@ textarea.raw-editor:focus {
   border-radius: 4px;
   background: transparent;
   border: 1px solid var(--border-strong);
-  color: transparent;
+  /* A ghost check at rest, like the card box: phones have no hover, so an
+     invisible-until-hover glyph left the row's main action unreadable. */
+  color: var(--ghost);
 }
 
 .agenda-item.is-overdue .agenda-complete {
