@@ -86,7 +86,9 @@ describe('boot re-derivation of stored titles', () => {
       .prepare('SELECT title, preview, seq FROM docs WHERE id = ?')
       .get(id) as unknown as { title: string; preview: string; seq: number };
     expect(row.title).toBe('Canvas');
-    expect(row.preview).toBe('');
+    // Drawing-only notes preview their size so identical Canvas cards
+    // stay tellable-apart.
+    expect(row.preview).toBe('empty canvas');
     expect(row.seq).toBeGreaterThan(staleSeq);
 
     // A client synced to the stale seq pulls the corrected doc.

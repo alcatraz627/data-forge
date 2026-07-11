@@ -65,7 +65,7 @@ export type CreateResult = { ok: ServerDoc } | { error: 'id_exists' };
 
 /** Bump when derivation semantics change (title, preview, tags, canvas flag),
  * so boot re-derives the stored values for rows written under the old rules. */
-const DERIVE_VERSION = '3';
+const DERIVE_VERSION = '4';
 
 /**
  * The single owner of the data directory. Every mutation flows through here:

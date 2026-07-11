@@ -49,4 +49,23 @@ describe('title derivation', () => {
     expect(derivePreview('# Title\nsecond line\nthird')).toBe('second line third');
     expect(derivePreview('only line')).toBe('');
   });
+
+  it('reads as text, not markdown: escapes undone, checklists become glyphs', () => {
+    expect(derivePreview('# T\n- \\[ \\] oat milk\n- \\[x\\] coffee')).toBe('☐ oat milk ☑ coffee');
+    expect(derivePreview('# T\n- [ ] eggs\n* [X] done one')).toBe('☐ eggs ☑ done one');
+    expect(derivePreview('# T\n**bold** and `code` and [a link](http://x)')).toBe(
+      'bold and code and a link',
+    );
+    expect(deriveTitle('Review \\[urgent\\] doc')).toBe('Review [urgent] doc');
+    expect(deriveTitle('- [ ] first task')).toBe('☐ first task');
+  });
+
+  it('previews a drawing-only note by its size', () => {
+    const canvas = (store: string) =>
+      `\`\`\`forge-canvas v1\n{"document":{"store":{${store}}}}\n\`\`\``;
+    expect(derivePreview(canvas('"shape:a":1,"shape:b":2'))).toBe('2 shapes');
+    expect(derivePreview(`# Sketch\n${canvas('"shape:a":1')}`)).toBe('1 shape');
+    expect(derivePreview(canvas(''))).toBe('empty canvas');
+    expect(derivePreview(`# T\nprose wins\n${canvas('"shape:a":1')}`)).toBe('prose wins');
+  });
 });

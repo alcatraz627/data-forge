@@ -1,4 +1,4 @@
-import { listCanvasBlocks } from '@forge/core';
+import { listCanvasBlocks, snapshotShapeCount } from '@forge/core';
 import { Suspense, lazy } from 'react';
 
 export interface NoteEditorProps {
@@ -106,16 +106,6 @@ function reassemble(segments: Segment[], index: number, text: string): string {
     .join('\n');
 }
 
-/** How many tldraw shapes a snapshot holds — the card's one honest metric. */
-function shapeCount(snapshot: unknown): number {
-  if (typeof snapshot !== 'object' || snapshot === null) return 0;
-  const store =
-    (snapshot as { document?: { store?: Record<string, unknown> } }).document?.store ??
-    (snapshot as { store?: Record<string, unknown> }).store ??
-    {};
-  return Object.keys(store).filter((k) => k.startsWith('shape:')).length;
-}
-
 function CanvasBlockCard({
   snapshot,
   onOpen,
@@ -124,7 +114,7 @@ function CanvasBlockCard({
   onOpen?: () => void;
 }) {
   const corrupt = snapshot === null;
-  const n = shapeCount(snapshot);
+  const n = snapshotShapeCount(snapshot);
   return (
     <button type="button" className="canvas-block" onClick={onOpen} disabled={corrupt || !onOpen}>
       <span className="canvas-block-art" aria-hidden="true">
