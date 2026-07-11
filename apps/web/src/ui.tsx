@@ -691,12 +691,15 @@ export function NoteCard({
   doc,
   onOpen,
   onTag,
+  selected = false,
 }: {
   doc: ServerDoc;
   onOpen: () => void;
   /** Tapping a #tag chip filters by that tag (spec §5); chips render inert
    * when the surface has nowhere to send the filter. */
   onTag?: (tag: string) => void;
+  /** Desktop keyboard-loop highlight (j/k), independent of DOM focus. */
+  selected?: boolean;
 }) {
   const canvas = noteHasCanvas(doc.body);
   const reminder = doc.reminders.find((r) => r.status !== 'done');
@@ -722,6 +725,7 @@ export function NoteCard({
     <div
       className="card"
       data-importance={doc.importance}
+      data-selected={selected || undefined}
       role="button"
       tabIndex={0}
       onClick={onOpen}
@@ -1556,12 +1560,16 @@ export function EditorPanel({
   doc,
   onClose,
   closeToken = 0,
+  docked = false,
 }: {
   doc: ServerDoc;
   onClose: () => void;
   /** Bumped by the app shell (e.g. a bottom-bar tab tap) to request a close;
    * the editor auto-saves on the way out. */
   closeToken?: number;
+  /** Desktop two-pane: render in place (right pane) instead of as a modal
+   * sheet over a backdrop. Same editor, different housing. */
+  docked?: boolean;
 }) {
   // Legacy whole-note canvases may still arrive over sync from an unmigrated
   // server; edit (and eventually save) them in block form (ADR-0006).
@@ -1693,21 +1701,17 @@ export function EditorPanel({
     onClose();
   };
 
-  return (
-    <div
-      className="editor-backdrop"
-      onClick={maybeClose}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') maybeClose();
-        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void save();
-      }}
-      role="presentation"
-    >
+  const onKeys = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Escape') maybeClose();
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void save();
+  };
+  const surface = (
       <div
-        className={`editor${inCanvas ? ' editor-canvas editor-fullscreen' : layout === 'fullscreen' ? ' editor-fullscreen' : ''}`}
+        className={`editor${docked ? ' editor-docked' : ''}${inCanvas ? ' editor-canvas editor-fullscreen' : layout === 'fullscreen' ? ' editor-fullscreen' : ''}`}
         onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        onKeyDown={docked ? onKeys : undefined}
+        role={docked ? 'region' : 'dialog'}
+        aria-modal={docked ? undefined : 'true'}
       >
         {!inCanvas && (
           <div className="editor-head">
@@ -1875,6 +1879,12 @@ export function EditorPanel({
         </div>
         )}
       </div>
+  );
+
+  if (docked) return surface;
+  return (
+    <div className="editor-backdrop" onClick={maybeClose} onKeyDown={onKeys} role="presentation">
+      {surface}
     </div>
   );
 }

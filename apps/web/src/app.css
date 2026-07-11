@@ -70,6 +70,60 @@ body {
   padding: 0 var(--space-4) var(--space-7);
 }
 
+/* Desktop two-pane (plan §8): list stays the left column, the open note
+   docks on the right. The readout spans both. */
+.app:not(.app-mobile) {
+  max-width: 1280px;
+  display: grid;
+  grid-template-columns: minmax(400px, 46%) minmax(0, 1fr);
+  column-gap: var(--space-5);
+  align-items: start;
+}
+
+.app:not(.app-mobile) > .readout {
+  grid-column: 1 / -1;
+}
+
+.app:not(.app-mobile) > main {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.pane-detail {
+  grid-column: 2;
+  position: sticky;
+  top: 44px;
+  height: calc(100dvh - 60px);
+  min-width: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--hairline-2);
+  padding: var(--space-3) 0 var(--space-4) var(--space-5);
+}
+
+.pane-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-docked {
+  width: 100%;
+  max-height: none;
+  min-height: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Keyboard-loop selection (j/k): the selected-surface voice, no focus ring. */
+.card[data-selected='true'] {
+  background: var(--surface-selected);
+  border-color: var(--accent-border);
+}
+
 .spacer {
   flex: 1;
 }

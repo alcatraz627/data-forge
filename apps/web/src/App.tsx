@@ -1,5 +1,5 @@
 import { DEFAULT_VIEWS, type ServerDoc, type ViewDef, matchesView } from '@forge/core';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionsPage,
   Agenda,
@@ -15,7 +15,15 @@ import {
   useIsMobile,
 } from './ui';
 import { Icon } from './icons';
-import { type SearchScope, captureCanvas, filterDocs, startSync, useForge } from './store';
+import {
+  type SearchScope,
+  captureCanvas,
+  filterDocs,
+  flashNotice,
+  saveDoc,
+  startSync,
+  useForge,
+} from './store';
 
 /** dark | light | system. `system` removes the data-theme attribute so the
  * stylesheet's prefers-color-scheme branch decides. */
@@ -81,6 +89,8 @@ export default function App() {
   // Bumped when navigation happens under an open editor; the editor
   // auto-saves and closes itself in response.
   const [closeToken, setCloseToken] = useState(0);
+  // Desktop keyboard loop: j/k row selection (independent of DOM focus).
+  const [selIdx, setSelIdx] = useState(-1);
   const [paletteDark, setPaletteDark] = useState(
     () => localStorage.getItem('forge-palette-dark') ?? 'deep-ocean',
   );
@@ -120,14 +130,23 @@ export default function App() {
     localStorage.setItem('forge-agenda-view', agendaView);
   }, [agendaView]);
 
+  // Live values for the stable keydown listener; re-binding per render would
+  // churn the window listener on every keystroke.
+  const keyCtx = useRef({ docs: [] as ServerDoc[], selIdx: -1, isMobile });
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      const ctx = keyCtx.current;
       if ((e.metaKey || e.ctrlKey) && /^[1-5]$/.test(e.key)) {
         const v = DEFAULT_VIEWS[Number(e.key) - 1];
         if (v) {
           e.preventDefault();
           setViewId(v.id);
         }
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        document.getElementById('search')?.focus();
         return;
       }
       const tag = (e.target as HTMLElement | null)?.tagName;
@@ -142,10 +161,42 @@ export default function App() {
         setScreen('capture');
         setTimeout(() => document.getElementById('capture')?.focus(), 0);
       }
+      // The desktop list loop (plan §8): j/k move, Enter/o open, e archive.
+      if (ctx.isMobile) return;
+      if (e.key === 'j' || e.key === 'k') {
+        e.preventDefault();
+        const n = ctx.docs.length;
+        if (n === 0) return;
+        const next =
+          e.key === 'j' ? Math.min(ctx.selIdx + 1, n - 1) : Math.max(ctx.selIdx - 1, 0);
+        setSelIdx(next);
+        setTimeout(() => {
+          document
+            .querySelectorAll('main .stream .card')
+            [next]?.scrollIntoView({ block: 'nearest' });
+        }, 0);
+      }
+      if ((e.key === 'Enter' || e.key === 'o') && ctx.selIdx >= 0) {
+        const doc = ctx.docs[ctx.selIdx];
+        if (doc) {
+          e.preventDefault();
+          setOpenDoc(doc);
+        }
+      }
+      if (e.key === 'e' && ctx.selIdx >= 0) {
+        const doc = ctx.docs[ctx.selIdx];
+        if (doc) {
+          e.preventDefault();
+          void saveDoc(doc.id, doc.rev, { archived: true });
+          flashNotice('Archived — it lives on in the Archive view');
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  keyCtx.current = { docs: [], selIdx, isMobile };
 
   const activeView = DEFAULT_VIEWS.find((v) => v.id === viewId) ?? ALL_VIEW;
   const viewDocs = useMemo(
@@ -161,6 +212,7 @@ export default function App() {
     () => (searching ? filterDocs(snap.docs, query, searchScope) : viewDocs),
     [snap.docs, viewDocs, query, searching, searchScope],
   );
+  keyCtx.current.docs = docs;
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const v of DEFAULT_VIEWS) c[v.id] = snap.docs.filter((d) => matchesView(d, v)).length;
@@ -308,11 +360,39 @@ export default function App() {
                 )}
               </div>
             ) : (
-              docs.map((d) => <NoteCard key={d.id} doc={d} onOpen={() => setOpenDoc(d)} onTag={openTagSearch} />)
+              docs.map((d, i) => (
+                <NoteCard
+                  key={d.id}
+                  doc={d}
+                  selected={!isMobile && i === selIdx}
+                  onOpen={() => setOpenDoc(d)}
+                  onTag={openTagSearch}
+                />
+              ))
             )}
           </section>
         ) : null}
       </main>
+
+      {!isMobile && (
+        <aside className="pane-detail">
+          {openDoc ? (
+            <EditorPanel
+              key={openDoc.id}
+              doc={openDoc}
+              closeToken={closeToken}
+              onClose={() => setOpenDoc(null)}
+              docked
+            />
+          ) : (
+            <div className="empty pane-empty">
+              <span className="empty-glyph">▮</span>
+              <p>Nothing open</p>
+              <span className="empty-hint">j/k to move · Enter to open · ⌘K to search</span>
+            </div>
+          )}
+        </aside>
+      )}
 
       {/* Page bar: page-scoped filters/actions in thumb reach, directly above
           the tab bar. Never navigation, never more than one row. */}
@@ -385,7 +465,7 @@ export default function App() {
           }}
         />
       )}
-      {openDoc && (
+      {isMobile && openDoc && (
         <EditorPanel
           key={openDoc.id}
           doc={openDoc}
