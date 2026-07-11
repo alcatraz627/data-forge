@@ -28,7 +28,12 @@ pnpm --filter @forge/web build >/dev/null
 
 # Perf budget: the main JS bundle (gzipped) must stay under 250KB, or the
 # capture path starts paying for weight that belongs behind a code-split.
-MAIN_JS="$(ls apps/web/dist/assets/index-*.js | head -1)"
+# "Main" is the chunk index.html actually loads — the build emits more than
+# one index-*.js, and picking by ls order measured whichever hash sorted
+# first (the budget silently watched the wrong file for a while).
+ENTRY_SRC="$(grep -o 'src="/assets/index-[^"]*\.js"' apps/web/dist/index.html | head -1 | cut -d'"' -f2)"
+MAIN_JS="apps/web/dist${ENTRY_SRC}"
+test -f "$MAIN_JS"
 GZ_BYTES="$(gzip -c "$MAIN_JS" | wc -c | tr -d ' ')"
 if [ "$GZ_BYTES" -gt 256000 ]; then
   echo "verify: FAIL — main bundle ${GZ_BYTES}B gz exceeds 250KB budget" >&2
