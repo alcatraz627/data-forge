@@ -5,6 +5,7 @@ import {
   Agenda,
   BottomBar,
   Capture,
+  EMPTY_HIDDEN_VIEWS,
   EditorPanel,
   type ListDensity,
   type MobileScreen,
@@ -218,6 +219,12 @@ export default function App() {
     for (const v of DEFAULT_VIEWS) c[v.id] = snap.docs.filter((d) => matchesView(d, v)).length;
     return c;
   }, [snap.docs]);
+
+  // A utility view's chip hides when it empties; the selection must follow,
+  // or unarchiving the last note strands the user on a chipless empty view.
+  useEffect(() => {
+    if (EMPTY_HIDDEN_VIEWS.has(viewId) && (counts[viewId] ?? 0) === 0) setViewId('all');
+  }, [viewId, counts]);
 
   const showAgenda = isMobile ? screen === 'agenda' : agendaMode;
   const showCapture = !isMobile ? !agendaMode : screen === 'capture';

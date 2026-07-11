@@ -182,7 +182,15 @@ export function startSync(): () => void {
   })();
 
   const onOnline = (): void => void drainThenPull();
+  // The SSE socket only errors when TCP actually breaks, which can lag a
+  // radio loss by its whole heartbeat window — the browser's own signal
+  // flips the readout to OFFLINE immediately.
+  const onOffline = (): void => {
+    connected = false;
+    rebuild();
+  };
   window.addEventListener('online', onOnline);
+  window.addEventListener('offline', onOffline);
   const unsubscribe = api.subscribeEvents(
     () => void pull(),
     (ok) => {
@@ -193,6 +201,7 @@ export function startSync(): () => void {
   );
   return () => {
     window.removeEventListener('online', onOnline);
+    window.removeEventListener('offline', onOffline);
     unsubscribe();
   };
 }

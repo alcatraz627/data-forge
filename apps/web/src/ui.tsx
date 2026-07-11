@@ -330,8 +330,11 @@ export function useIsMobile(): boolean {
   return mobile;
 }
 
-/** Views that clutter the chip row until they hold something. */
-const EMPTY_HIDDEN = new Set(['conflicts', 'archive']);
+/** Views that clutter the chip row until they hold something. Exported so
+ * the shell can fall back to All when the active one empties — otherwise
+ * unarchiving the last note strands the user on a view with no chip. */
+export const EMPTY_HIDDEN_VIEWS = new Set(['conflicts', 'archive']);
+const EMPTY_HIDDEN = EMPTY_HIDDEN_VIEWS;
 
 export function ViewChips({
   views,

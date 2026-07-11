@@ -100,12 +100,15 @@ function formatWithOffset(instant: Date, offMin: number): string {
 
 /**
  * Applies a "done" action. A one-shot reminder is marked done. A recurring
- * reminder rolls forward to its next occurrence after now and stays active,
- * so completing "every Tuesday" schedules next Tuesday. Returns null when a
- * recurring series has no future occurrence (then treat as done).
+ * reminder rolls forward and stays active, so completing "every Tuesday"
+ * schedules next Tuesday. "Forward" means past BOTH now and the instance
+ * being completed — watering the plants at 19:00 must silence tonight's
+ * 22:00 firing, not leave it armed.
  */
 export function completeReminder(reminder: Reminder, now: Date): Reminder {
-  const next = nextOccurrenceAfter(reminder, now);
+  const currentMs = new Date(effectiveFireAt(reminder)).getTime();
+  const past = new Date(Math.max(now.getTime(), Number.isNaN(currentMs) ? 0 : currentMs));
+  const next = nextOccurrenceAfter(reminder, past);
   if (next) {
     return {
       at: formatWithOffset(next, offsetMinutes(reminder.at)),

@@ -64,6 +64,16 @@ describe('completeReminder', () => {
     const rolled = completeReminder(r, new Date('2026-07-07T09:00:00+05:30'));
     expect(rolled.at).toBe('2026-07-14T09:00:00+05:30');
   });
+
+  it('completing EARLY (before the instance fires) still advances past it', () => {
+    const daily: Reminder = {
+      at: '2026-07-11T22:00:00+05:30',
+      rrule: 'FREQ=DAILY',
+      status: 'active',
+    };
+    const rolled = completeReminder(daily, new Date('2026-07-11T19:00:00+05:30'));
+    expect(rolled.at).toBe('2026-07-12T22:00:00+05:30');
+  });
 });
 
 describe('recurrence expands on local wall-clock (H4)', () => {
