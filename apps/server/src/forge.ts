@@ -302,6 +302,10 @@ export class Forge {
   }
 
   createDoc(input: CreateDocBody): CreateResult {
+    // Old clients may still send legacy whole-note canvases — convert at the
+    // door. Before the dedup check, so a retried legacy create still matches
+    // the converted body we stored the first time.
+    input = { ...input, body: migrateLegacyCanvas(input.body) };
     const id = input.id ?? newId();
     const existing = this.rowById(id);
     if (existing && existing.deleted === 0) {
@@ -343,6 +347,9 @@ export class Forge {
     const row = this.rowById(id);
     if (!row || row.deleted === 1) return null;
 
+    // Old clients may still send legacy whole-note canvases — convert at the
+    // door, so every path below (direct, merge, conflict) stores block form.
+    if (input.body !== undefined) input = { ...input, body: migrateLegacyCanvas(input.body) };
     const head = this.headDoc(row);
     const now = nowIso();
     const fields: Partial<Doc> = {};
@@ -482,6 +489,17 @@ export class Forge {
           `skipping ${relPath}: duplicate id ${parsed.doc.id} (already at ${other.path})`,
         );
         return false;
+      }
+      // Legacy whole-note canvases convert on ingest, not just at the boot
+      // sweep — files can arrive after the sweep's stamp (watcher, restore
+      // from files, hand drops) and must not stay legacy forever.
+      const migrated = migrateLegacyCanvas(parsed.doc.body);
+      if (migrated !== parsed.doc.body) {
+        const healed: Doc = { ...parsed.doc, body: migrated };
+        const canonical = this.persist(healed, relPath);
+        const { seq } = this.indexDoc(healed, relPath, canonical);
+        this.afterWrite(seq);
+        return true;
       }
       const { seq } = this.indexDoc(parsed.doc, relPath, text);
       this.afterWrite(seq);

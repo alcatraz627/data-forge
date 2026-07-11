@@ -1228,6 +1228,101 @@ textarea.raw-editor:focus {
   min-height: 48vh;
 }
 
+/* One scrolling body: prose runs and canvas blocks stack on the sheet
+   (one data kind, ADR-0006). Scroll lives on the container so a note with
+   several segments moves as one page. */
+.note-body {
+  display: flex;
+  flex-direction: column;
+  max-height: 55vh;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--hairline-2);
+}
+
+.note-body .rich-editor .ProseMirror {
+  max-height: none;
+  overflow-y: visible;
+  border-bottom: none;
+}
+
+.editor-fullscreen .note-body {
+  max-height: none;
+  min-height: 48vh;
+}
+
+/* Per-segment heights: a lone prose run keeps the roomy single-note feel;
+   runs sharing the body with canvas blocks hug their content. */
+.editor-fullscreen .note-body .rich-editor .ProseMirror {
+  min-height: 0;
+}
+
+.editor-fullscreen .note-body > .rich-editor:first-child:last-child .ProseMirror {
+  min-height: 48vh;
+}
+
+.note-body .rich-editor:not(:first-child:last-child) .ProseMirror {
+  min-height: 0;
+}
+
+/* A drawing inside the note. Dashed = tap-edits-here (the app-wide
+   convention); the ▨ art area stands in for a thumbnail until block
+   previews land. */
+.canvas-block {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 96px;
+  margin: var(--space-2) 0;
+  padding: 0;
+  background: var(--surface-inset);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.canvas-block:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.canvas-block-art {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 52px;
+  font-family: var(--font-mono);
+  font-size: 26px;
+  color: var(--ghost);
+}
+
+.canvas-block-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 32px;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--hairline-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.canvas-block-label {
+  color: var(--text);
+}
+
+.canvas-block-sub {
+  color: var(--faint);
+}
+
+.canvas-block-open {
+  margin-left: auto;
+  color: var(--accent);
+}
+
 /* The note body sits directly on the sheet surface — no bordered well. */
 .rich-editor .ProseMirror {
   font-family: var(--font-read);

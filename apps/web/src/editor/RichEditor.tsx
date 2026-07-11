@@ -3,6 +3,7 @@ import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { useRef } from 'react';
 import { Markdown } from 'tiptap-markdown';
 import { uploadAttachment } from '../api';
 import { flashNotice } from '../store';
@@ -25,6 +26,11 @@ export default function RichEditor({
   onChange: (markdown: string) => void;
   autoFocus: boolean;
 }) {
+  // useEditor captures its options once at mount, but onChange is a fresh
+  // closure per render (it carries the segment layout around this prose run).
+  // Route through a ref or every edit would reassemble against a stale body.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -40,7 +46,7 @@ export default function RichEditor({
       handleDrop: (_view, event) => uploadFromDataTransfer((event as DragEvent).dataTransfer),
     },
     onUpdate: ({ editor: e }) => {
-      onChange((e.storage as unknown as MarkdownStorage).markdown.getMarkdown());
+      onChangeRef.current((e.storage as unknown as MarkdownStorage).markdown.getMarkdown());
     },
   });
 

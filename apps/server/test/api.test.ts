@@ -453,23 +453,27 @@ describe('canvas bodies over the wire', () => {
   // from the files, which are canonical.
   it('a canvas body survives the changes feed and GET', async () => {
     const fa = await makeApp();
-    const canvasBody = '<!-- forge:canvas v1 -->\n{"shapes":{"a":1}}';
-    const doc = await create(fa, canvasBody, { durability: 'working', formality: 'draft' });
+    // A legacy whole-note canvas from an old client converts at the door
+    // (ADR-0006); what must SURVIVE is the drawing, in block form.
+    const legacyBody = '<!-- forge:canvas v1 -->\n{"shapes":{"a":1}}';
+    const blockBody = '```forge-canvas v1\n{"shapes":{"a":1}}\n```';
+    const doc = await create(fa, legacyBody, { durability: 'working', formality: 'draft' });
 
     const got = await fa.app.request(`/api/docs/${doc.id}`);
-    expect(((await got.json()) as ServerDoc).body).toBe(canvasBody);
+    expect(((await got.json()) as ServerDoc).body).toBe(blockBody);
 
     const res = await fa.app.request('/api/changes?since=0');
     const feed = (await res.json()) as { changes: Array<{ id: string; doc?: ServerDoc }> };
     const entry = feed.changes.find((c) => c.id === doc.id);
-    expect(entry?.doc?.body).toBe(canvasBody);
+    expect(entry?.doc?.body).toBe(blockBody);
     expect(entry?.doc?.title).toBe('Canvas');
 
-    // Idempotent create retry (offline outbox replays) must still match.
+    // Idempotent create retry (offline outbox replays) must still match,
+    // even though the stored body is the converted form.
     const retry = await fa.app.request('/api/docs', {
       method: 'POST',
       headers: HEADERS,
-      body: JSON.stringify({ id: doc.id, body: canvasBody, source: 'test' }),
+      body: JSON.stringify({ id: doc.id, body: legacyBody, source: 'test' }),
     });
     expect(retry.status).toBe(201);
   });

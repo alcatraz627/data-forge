@@ -44,17 +44,26 @@ export default function CanvasEditor({
               // corrupt/older snapshot — start from a blank canvas rather than crash
             }
           }
+          const writeBack = (): void => {
+            onChange(replaceCanvasBlock(body, block?.startLine ?? 0, getSnapshot(editor.store)));
+          };
           let timer: ReturnType<typeof setTimeout> | undefined;
           editor.store.listen(
             () => {
               onTouch?.();
               if (timer) clearTimeout(timer);
-              timer = setTimeout(() => {
-                onChange(replaceCanvasBlock(body, block?.startLine ?? 0, getSnapshot(editor.store)));
-              }, 500);
+              timer = setTimeout(writeBack, 500);
             },
             { source: 'user', scope: 'document' },
           );
+          // Flush on unmount: stepping back to the note before the debounce
+          // fires must not let a late write-back clobber prose typed after.
+          return () => {
+            if (timer) {
+              clearTimeout(timer);
+              writeBack();
+            }
+          };
         }}
       />
     </div>

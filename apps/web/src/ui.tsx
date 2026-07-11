@@ -16,7 +16,10 @@ import {
   emptyCanvasBody,
   hasCanvasBlock,
   isLegacyCanvas,
+  listCanvasBlocks,
+  migrateLegacyCanvas,
   nowIso,
+  stripCanvasBlocks,
 } from '@forge/core';
 import { Component, type JSX, type ReactNode, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import * as api from './api';
@@ -1210,7 +1213,9 @@ export function EditorPanel({
    * the editor auto-saves on the way out. */
   closeToken?: number;
 }) {
-  const [body, setBody] = useState(doc.body);
+  // Legacy whole-note canvases may still arrive over sync from an unmigrated
+  // server; edit (and eventually save) them in block form (ADR-0006).
+  const [body, setBody] = useState(() => migrateLegacyCanvas(doc.body));
   const [axes, setAxes] = useState<AxisValues>({
     durability: doc.durability,
     formality: doc.formality,
@@ -1231,17 +1236,20 @@ export function EditorPanel({
   });
   const [busy, setBusy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const canvas = noteHasCanvas(doc.body);
   const [editorMode, setEditorMode] = useState<'rich' | 'raw'>(() =>
     localStorage.getItem('forge-editor-mode') === 'raw' ? 'raw' : 'rich',
   );
-  // Canvases live fullscreen only (a sheet can't host a drawing surface);
-  // text notes default to the quick-glance sheet and remember a manual
-  // fullscreen preference across sessions.
-  const [layout, setLayout] = useState<EditorLayout>(() => {
-    if (canvas) return 'fullscreen';
-    return localStorage.getItem('forge-layout-text') === 'fullscreen' ? 'fullscreen' : 'contained';
-  });
+  // A note that is nothing but one drawing opens straight into it; a note
+  // with prose opens as text, and a canvas block opens fullscreen on tap
+  // (drawing needs the whole screen — a sheet can't host it).
+  const canvasOnly = listCanvasBlocks(body).length === 1 && stripCanvasBlocks(body).trim() === '';
+  const [canvasAt, setCanvasAt] = useState<number | null>(() =>
+    canvasOnly ? (listCanvasBlocks(body)[0]?.startLine ?? null) : null,
+  );
+  const inCanvas = canvasAt !== null;
+  const [layout, setLayout] = useState<EditorLayout>(() =>
+    localStorage.getItem('forge-layout-text') === 'fullscreen' ? 'fullscreen' : 'contained',
+  );
   const toggleLayout = (): void => {
     const next: EditorLayout = layout === 'contained' ? 'fullscreen' : 'contained';
     setLayout(next);
@@ -1281,8 +1289,14 @@ export function EditorPanel({
   const maybeClose = (): void => {
     // A canvas with no strokes at all is an artifact of tapping "New canvas" —
     // closing it deletes it, so backing out of a new canvas leaves nothing
-    // behind (and opening a stray empty one heals it).
-    if (canvas && body === emptyCanvasBody() && !canvasTouched.current) {
+    // behind (and opening a stray empty one heals it). Both sides of the
+    // check: it must have OPENED empty too, so a hand-typed empty fence in a
+    // real note never triggers a delete.
+    if (
+      body === emptyCanvasBody() &&
+      migrateLegacyCanvas(saved.body) === emptyCanvasBody() &&
+      !canvasTouched.current
+    ) {
       void removeDoc(doc.id);
       flashNotice('Empty canvas discarded');
       onClose();
@@ -1335,12 +1349,12 @@ export function EditorPanel({
       role="presentation"
     >
       <div
-        className={`editor${canvas ? ' editor-canvas' : ''}${layout === 'fullscreen' ? ' editor-fullscreen' : ''}`}
+        className={`editor${inCanvas ? ' editor-canvas editor-fullscreen' : layout === 'fullscreen' ? ' editor-fullscreen' : ''}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
       >
-        {!canvas && (
+        {!inCanvas && (
           <div className="editor-head">
             <span className="file-path">~/DataForge/notes/{doc.id}.md</span>
             <button
@@ -1357,7 +1371,7 @@ export function EditorPanel({
             the bottom of the screen (its toolbar + the tab bar are already
             two stacked chromes — a third was mis-tap territory). Drawing
             saves on close like any other dirty edit. */}
-        {canvas && (
+        {inCanvas && (
           <div className="canvas-topbar">
             <ActionMenu
               title="More actions"
@@ -1376,23 +1390,26 @@ export function EditorPanel({
               ]}
             />
             <span className="spacer" />
+            {/* A drawing-only note closes outright; a canvas inside a prose
+                note steps back to the text (the drawing rides the same body). */}
             <button
               type="button"
               className="icon-btn head-toggle"
-              title="Save and close"
-              onClick={maybeClose}
+              title={canvasOnly ? 'Save and close' : 'Back to note'}
+              onClick={canvasOnly ? maybeClose : () => setCanvasAt(null)}
             >
-              <Icon name="x" />
+              <Icon name={canvasOnly ? 'x' : 'minimize'} />
             </button>
           </div>
         )}
         {showHistory ? (
           <HistoryPanel docId={doc.id} onPick={setBody} onClose={() => setShowHistory(false)} />
-        ) : canvas ? (
+        ) : inCanvas ? (
           <CanvasErrorBoundary>
             <Suspense fallback={<div className="canvas-loading">Opening canvas…</div>}>
               <LazyCanvasEditor
                 value={body}
+                blockStart={canvasAt ?? undefined}
                 onChange={setBody}
                 onTouch={() => {
                   canvasTouched.current = true;
@@ -1407,34 +1424,41 @@ export function EditorPanel({
             onChange={setBody}
             mode={editorMode}
             autoFocus
+            onOpenCanvas={setCanvasAt}
           />
         )}
-        {!canvas && (
+        {!inCanvas && (
           <div className="editor-section">
             <AxisDisclosure value={axes} onChange={setAxes} />
           </div>
         )}
-        {!canvas && (
+        {!inCanvas && (
           <div className="editor-section">
             <span className="section-label">Reminders</span>
             <ReminderEditor reminders={reminders} onChange={setReminders} />
           </div>
         )}
-        {!canvas && (
+        {!inCanvas && (
         <div className="editor-actions">
           <ActionMenu
             up
             title="More actions"
             items={[
-              ...(!canvas
-                ? [
-                    {
-                      icon: (editorMode === 'rich' ? 'code' : 'pencil') as IconName,
-                      label: editorMode === 'rich' ? 'Raw markdown' : 'Rich text',
-                      onPick: toggleMode,
-                    },
-                  ]
-                : []),
+              {
+                icon: (editorMode === 'rich' ? 'code' : 'pencil') as IconName,
+                label: editorMode === 'rich' ? 'Raw markdown' : 'Rich text',
+                onPick: toggleMode,
+              },
+              {
+                icon: 'pencil' as IconName,
+                label: 'Add canvas',
+                onPick: () => {
+                  const next = body.trim() ? `${body}\n\n${emptyCanvasBody()}` : emptyCanvasBody();
+                  setBody(next);
+                  const added = listCanvasBlocks(next).at(-1);
+                  if (added) setCanvasAt(added.startLine);
+                },
+              },
               // Auto-save-on-close removed the discard dialog; this is the
               // deliberate way to walk away from unwanted edits instead.
               ...(dirty

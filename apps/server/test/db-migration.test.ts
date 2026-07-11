@@ -1,12 +1,13 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { emptyCanvasBody } from '@forge/core';
+import { emptyCanvasBody, newId, nowIso, serializeDoc } from '@forge/core';
 import { describe, expect, it } from 'vitest';
 import { createForgeApp } from '../src/app.js';
 import { openDb } from '../src/db.js';
 import { Forge } from '../src/forge.js';
+import { docRelPath } from '../src/store.js';
 
 /** An index written by a build predating the `archived` column must be
  * migrated in place, not rebuilt — rebuilding would reset the change-feed
@@ -114,11 +115,30 @@ describe('legacy canvas body migration', () => {
     const dataDir = join(mkdtempSync(join(tmpdir(), 'forge-canvasmig-')), 'data');
     const { forge } = await createForgeApp({ dataDir, gitQuietMs: 600_000 });
     const legacyBody = '<!-- forge:canvas v1 -->\n{"shapes":{"a":1}}';
-    const created = forge.createDoc({ body: legacyBody, source: 'test' });
+    const created = forge.createDoc({ body: 'placeholder', source: 'test' });
     if (!('ok' in created)) throw new Error('create failed');
-    const { id, updated, rev } = created.ok;
+    const { id, updated, rev, created: createdAt } = created.ok;
 
-    // Simulate a data dir from before the block format existed.
+    // Simulate a data dir from before the block format existed: the API now
+    // converts at the door, so regress the FILE directly, as an old build
+    // would have left it, and clear the sweep stamp.
+    writeFileSync(
+      join(dataDir, docRelPath(id)),
+      serializeDoc({
+        id,
+        created: createdAt,
+        updated,
+        durability: 'ephemeral',
+        formality: 'scratch',
+        importance: 'normal',
+        pinned: false,
+        archived: false,
+        reminders: [],
+        source: 'test',
+        tags: [],
+        body: legacyBody,
+      }),
+    );
     forge.db.prepare("DELETE FROM kv WHERE key = 'canvas_block_version'").run();
 
     const reopened = new Forge(dataDir, { gitQuietMs: 600_000 });
@@ -132,5 +152,35 @@ describe('legacy canvas body migration', () => {
     const revAfter = reopened.getDoc(id)?.rev;
     const again = new Forge(dataDir, { gitQuietMs: 600_000 });
     expect(again.getDoc(id)?.rev).toBe(revAfter);
+  });
+
+  it('converts a legacy file that arrives after the boot sweep (ingest path)', async () => {
+    const dataDir = join(mkdtempSync(join(tmpdir(), 'forge-canvasing-')), 'data');
+    const { forge } = await createForgeApp({ dataDir, gitQuietMs: 600_000 });
+    const id = newId();
+    const rel = docRelPath(id);
+    const abs = join(dataDir, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    const now = nowIso();
+    writeFileSync(
+      abs,
+      serializeDoc({
+        id,
+        created: now,
+        updated: now,
+        durability: 'working',
+        formality: 'draft',
+        importance: 'normal',
+        pinned: false,
+        archived: false,
+        reminders: [],
+        source: 'test',
+        tags: [],
+        body: '<!-- forge:canvas v1 -->\n{"shapes":{"z":9}}',
+      }),
+    );
+    forge.applyExternalFile(rel, readFileSync(abs, 'utf8'));
+    expect(forge.getDoc(id)?.body).toBe('```forge-canvas v1\n{"shapes":{"z":9}}\n```');
+    expect(readFileSync(abs, 'utf8')).toContain('```forge-canvas v1');
   });
 });
