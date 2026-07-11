@@ -67,6 +67,24 @@ export function nextOccurrenceAfter(reminder: Reminder, after: Date): Date | nul
   return nextFloating ? new Date(toReal(nextFloating.getTime(), off)) : null;
 }
 
+/** Every firing of a reminder inside [from, to), as real instants — the
+ * calendar's day dots. A one-shot contributes its single time; a recurring
+ * reminder expands through the window (capped — a month of minutely firings
+ * must not hang the UI). Done reminders contribute nothing. */
+export function occurrencesBetween(reminder: Reminder, from: Date, to: Date, cap = 120): Date[] {
+  if (reminder.status === 'done') return [];
+  const r = rule(reminder);
+  if (!r) {
+    const at = new Date(effectiveFireAt(reminder));
+    return at >= from && at < to ? [at] : [];
+  }
+  const off = offsetMinutes(reminder.at);
+  return r
+    .between(toFloating(from.getTime(), off), toFloating(to.getTime(), off), true)
+    .slice(0, cap)
+    .map((d) => new Date(toReal(d.getTime(), off)));
+}
+
 /** Formats an instant as ISO-8601 keeping a specific UTC offset, so a reminder
  * rolled forward preserves its original zone instead of collapsing to Z. */
 function formatWithOffset(instant: Date, offMin: number): string {

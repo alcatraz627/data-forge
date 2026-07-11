@@ -21,6 +21,7 @@ import {
   migrateLegacyCanvas,
   normalizeTags,
   nowIso,
+  occurrencesBetween,
   stripCanvasBlocks,
 } from '@forge/core';
 import { Component, type JSX, type ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
@@ -634,8 +635,9 @@ export function Capture({ onSaved, onCanvas }: { onSaved?: () => void; onCanvas?
         />
       </div>
       {/* Axes and Save share one row: no dead band between the last control
-          and the action, and the eye travels summary → Save in a line. */}
-      <div className="capture-foot">
+          and the action. On the phone that row IS the page bar — Save never
+          leaves the thumb, and the viewport meta keeps it above the keyboard. */}
+      <div className={mobile ? 'page-bar capture-bar' : 'capture-foot'}>
         <AxisDisclosure value={axes} onChange={setAxes} />
         <button
           type="button"
@@ -896,12 +898,33 @@ function ReminderChip({
 }
 
 /** The time-sorted list of what needs attention: every active reminder across
- * notes, overdue first, with done and snooze actions. This is the Google
+ * notes, overdue first, with done and snooze actions — or the same data as a
+ * month calendar (ember dots per firing, hot dots on overdue days, today an
+ * accent square, the selected day's rows below the grid). This is the Google
  * Tasks replacement surface. */
-export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: string) => void }) {
+export function Agenda({
+  docs,
+  onOpen,
+  view = 'list',
+  jumpToken = 0,
+}: {
+  docs: ServerDoc[];
+  onOpen: (id: string) => void;
+  view?: 'list' | 'calendar';
+  /** Bumped by the page bar's Today button. */
+  jumpToken?: number;
+}) {
   const [, force] = useState(0);
   const now = new Date();
   const entries = buildAgenda(docs, now);
+  const todayRef = useRef<HTMLDivElement>(null);
+  const seenJump = useRef(jumpToken);
+  useEffect(() => {
+    if (jumpToken !== seenJump.current) {
+      seenJump.current = jumpToken;
+      if (view === 'list') todayRef.current?.scrollIntoView({ block: 'start' });
+    }
+  }, [jumpToken, view]);
 
   // Day scaffolding: the agenda reads as a schedule (today, tomorrow, later),
   // not one undifferentiated queue. Today renders even when empty so the day
@@ -945,7 +968,7 @@ export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: strin
     force((n) => n + 1);
   };
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && view === 'list') {
     return (
       <div className="empty">
         <Icon name="calendar" />
@@ -955,11 +978,24 @@ export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: strin
     );
   }
 
+  if (view === 'calendar') {
+    return (
+      <AgendaCalendar
+        docs={docs}
+        entries={entries}
+        now={now}
+        jumpToken={jumpToken}
+        onOpen={onOpen}
+        act={act}
+      />
+    );
+  }
+
   return (
     <div className="agenda">
       {groups.map(({ name, detail, list, hint }) =>
         list.length === 0 && !hint ? null : (
-          <div className="agenda-group" key={name}>
+          <div className="agenda-group" key={name} ref={name === 'Today' ? todayRef : undefined}>
             <h2 className={`section-rule${name === 'Overdue' ? ' overdue' : ''}`}>
               <span>
                 {name.toUpperCase()}
@@ -1011,6 +1047,190 @@ export function Agenda({ docs, onOpen }: { docs: ServerDoc[]; onOpen: (id: strin
           </div>
         ),
       )}
+    </div>
+  );
+}
+
+/** The agenda as a month grid: an ember dot on days with a firing
+ * (recurrences expand across the month), a hot dot on days something is
+ * overdue, today an accent square. Tapping a day lists its rows below the
+ * grid; only a reminder's CURRENT instance carries done/snooze — future
+ * firings are read-only schedule. */
+function AgendaCalendar({
+  docs,
+  entries,
+  now,
+  jumpToken,
+  onOpen,
+  act,
+}: {
+  docs: ServerDoc[];
+  entries: AgendaEntry[];
+  now: Date;
+  jumpToken: number;
+  onOpen: (id: string) => void;
+  act: (e: AgendaEntry, action: 'done' | 'snooze', snoozeUntil?: Date) => Promise<void>;
+}) {
+  const dayStart = (d: Date): number => {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x.getTime();
+  };
+  const today = dayStart(now);
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [selected, setSelected] = useState<number>(today);
+  const seenJump = useRef(jumpToken);
+  useEffect(() => {
+    if (jumpToken !== seenJump.current) {
+      seenJump.current = jumpToken;
+      setMonthOffset(0);
+      setSelected(today);
+    }
+  }, [jumpToken, today]);
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + monthOffset + 1, 1);
+  // Monday-anchored 6-week grid, padded with the neighbor months' days.
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(1 - ((monthStart.getDay() + 6) % 7));
+  const cells = Array.from({ length: 42 }, (_, i) =>
+    dayStart(new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i)),
+  );
+  const gridEnd = new Date((cells[41] as number) + 86_400_000);
+
+  interface Occurrence {
+    docId: string;
+    title: string;
+    reminderIndex: number;
+    at: Date;
+  }
+  const occByDay = new Map<number, Occurrence[]>();
+  for (const doc of docs) {
+    if (doc.archived) continue;
+    doc.reminders.forEach((r, reminderIndex) => {
+      for (const at of occurrencesBetween(r, new Date(cells[0] as number), gridEnd)) {
+        const key = dayStart(at);
+        const list = occByDay.get(key) ?? [];
+        list.push({ docId: doc.id, title: doc.title, reminderIndex, at });
+        occByDay.set(key, list);
+      }
+    });
+  }
+  const hotDays = new Set(entries.filter((e) => e.overdue).map((e) => dayStart(new Date(e.at))));
+  const currentByKey = new Map(entries.map((e) => [`${e.docId}:${e.reminderIndex}`, e]));
+
+  const dayRows = (occByDay.get(selected) ?? []).sort((a, b) => a.at.getTime() - b.at.getTime());
+  const monthLabel = monthStart
+    .toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    .toUpperCase();
+  // 2026-01-05 is a Monday; the header row just needs locale weekday letters.
+  const dow = Array.from({ length: 7 }, (_, i) =>
+    new Date(2026, 0, 5 + i).toLocaleDateString(undefined, { weekday: 'narrow' }),
+  );
+
+  return (
+    <div className="agenda agenda-calendar">
+      <div className="cal-head">
+        <button
+          type="button"
+          className="icon-btn"
+          title="Previous month"
+          onClick={() => setMonthOffset((m) => m - 1)}
+        >
+          ‹
+        </button>
+        <span className="cal-month">{monthLabel}</span>
+        <button
+          type="button"
+          className="icon-btn"
+          title="Next month"
+          onClick={() => setMonthOffset((m) => m + 1)}
+        >
+          ›
+        </button>
+      </div>
+      <div className="cal-grid">
+        {dow.map((d, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed 7 weekday labels
+          <span key={`dow${i}`} className="cal-dow">
+            {d}
+          </span>
+        ))}
+        {cells.map((day) => {
+          const inMonth = day >= monthStart.getTime() && day < monthEnd.getTime();
+          const has = (occByDay.get(day) ?? []).length > 0;
+          return (
+            <button
+              key={day}
+              type="button"
+              className={`cal-day${inMonth ? '' : ' out'}${day === today ? ' today' : ''}${day === selected ? ' selected' : ''}`}
+              onClick={() => setSelected(day)}
+            >
+              <span className="cal-num">{new Date(day).getDate()}</span>
+              <span className="cal-dots" aria-hidden="true">
+                {has && <span className="cal-dot" />}
+                {hotDays.has(day) && <span className="cal-dot hot" />}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <h2 className="section-rule">
+        <span>
+          {new Date(selected)
+            .toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+            .toUpperCase()}
+        </span>
+        <span className="rule-line" />
+        <span className="rule-count">{dayRows.length}</span>
+      </h2>
+      {dayRows.length === 0 && <p className="agenda-hint">Nothing this day</p>}
+      {dayRows.map((o) => {
+        const cur = currentByKey.get(`${o.docId}:${o.reminderIndex}`);
+        const isCurrent = !!cur && dayStart(new Date(cur.at)) === selected;
+        return (
+          <div
+            className={`agenda-item${isCurrent && cur.overdue ? ' is-overdue' : ''}`}
+            key={`${o.docId}:${o.reminderIndex}:${o.at.getTime()}`}
+          >
+            {isCurrent ? (
+              <button
+                type="button"
+                className="agenda-complete"
+                title="Mark done"
+                onClick={() => void act(cur, 'done')}
+              >
+                <Icon name="check" />
+              </button>
+            ) : (
+              <span className="agenda-complete is-future" title="Future occurrence">
+                <Icon name="history" />
+              </span>
+            )}
+            <button type="button" className="agenda-main" onClick={() => onOpen(o.docId)}>
+              <span className="agenda-title">{o.title}</span>
+              <span className={`agenda-when${isCurrent && cur.overdue ? ' overdue' : ''}`}>
+                {isCurrent && cur.overdue
+                  ? latenessLabel(cur.at, now)
+                  : o.at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </button>
+            {isCurrent && (
+              <div className="agenda-actions">
+                <ActionMenu
+                  title="Snooze"
+                  icon="snooze"
+                  items={reminderPresets(now).map((p) => ({
+                    icon: 'snooze' as IconName,
+                    label: p.label,
+                    onPick: () => void act(cur, 'snooze', p.at),
+                  }))}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

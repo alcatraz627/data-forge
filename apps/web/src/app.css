@@ -350,6 +350,18 @@ textarea.raw-editor:focus {
   padding-top: var(--space-3);
 }
 
+/* The mobile capture foot rides the fixed page-bar slot; axes stay the
+   flexible half, Save keeps its full tap size at the thumb edge. */
+.capture-bar {
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.capture-bar .axis-disclosure {
+  flex: 1;
+  min-width: 0;
+}
+
 .capture-foot .axis-disclosure {
   flex: 1;
   min-width: 0;
@@ -1749,6 +1761,98 @@ textarea.raw-editor:focus {
 .agenda-complete .icon {
   width: 18px;
   height: 18px;
+}
+
+/* ── Agenda month calendar ─────────────────────────────────────────── */
+
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.cal-month {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--text);
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: var(--space-4);
+}
+
+.cal-dow {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  padding: var(--space-1) 0;
+}
+
+/* Square-cornered day cells — same control language as checks and toggles.
+   Today is the accent square; selection is a filled surface. */
+.cal-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 48px;
+  padding: var(--space-1) 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--dim);
+  cursor: pointer;
+}
+
+.cal-day.out {
+  color: var(--ghost);
+}
+
+.cal-day.today {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.cal-day.selected {
+  background: var(--accent-surface);
+  border-color: var(--accent-border);
+  color: var(--text);
+}
+
+.cal-dots {
+  display: flex;
+  gap: 3px;
+  min-height: 5px;
+}
+
+.cal-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--time);
+}
+
+.cal-dot.hot {
+  background: var(--overdue);
+}
+
+/* A future firing of a recurring reminder: schedule, not actionable. */
+.agenda-complete.is-future {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  color: var(--ghost);
 }
 
 .agenda-main {

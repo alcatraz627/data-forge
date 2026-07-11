@@ -69,6 +69,11 @@ export default function App() {
     const stored = localStorage.getItem('forge-list-density');
     return stored === 'skim' || stored === 'cards' ? stored : 'list';
   });
+  const [agendaView, setAgendaView] = useState<'list' | 'calendar'>(() =>
+    localStorage.getItem('forge-agenda-view') === 'calendar' ? 'calendar' : 'list',
+  );
+  // Bumped by the page bar's Today button; the agenda scrolls/selects today.
+  const [agendaJump, setAgendaJump] = useState(0);
   // Captured at click time: the editor works on a stable snapshot (its own
   // baseRev handles concurrent changes), so a live delete elsewhere can't
   // yank the panel out from under in-progress typing.
@@ -111,6 +116,9 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('forge-list-density', listDensity);
   }, [listDensity]);
+  useEffect(() => {
+    localStorage.setItem('forge-agenda-view', agendaView);
+  }, [agendaView]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -235,6 +243,8 @@ export default function App() {
         {showAgenda && (
           <Agenda
             docs={snap.docs}
+            view={agendaView}
+            jumpToken={agendaJump}
             onOpen={(id) => setOpenDoc(snap.docs.find((d) => d.id === id) ?? null)}
           />
         )}
@@ -317,6 +327,31 @@ export default function App() {
             onClick={cycleListDensity}
           >
             {listDensity === 'skim' ? 'Skim' : listDensity === 'list' ? 'List' : 'Cards'}
+          </button>
+        </div>
+      )}
+
+      {isMobile && screen === 'agenda' && (
+        <div className="page-bar">
+          <div className="view-chips">
+            {(['list', 'calendar'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                className={`view-chip${agendaView === v ? ' chip-active' : ''}`}
+                onClick={() => setAgendaView(v)}
+              >
+                {v === 'list' ? 'List' : 'Calendar'}
+              </button>
+            ))}
+          </div>
+          <span className="spacer" />
+          <button
+            type="button"
+            className="density-toggle"
+            onClick={() => setAgendaJump((j) => j + 1)}
+          >
+            Today
           </button>
         </div>
       )}

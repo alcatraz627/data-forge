@@ -4,6 +4,7 @@ import {
   completeReminder,
   effectiveFireAt,
   nextOccurrenceAfter,
+  occurrencesBetween,
   snoozeReminder,
 } from '../src/reminders.js';
 import type { Reminder } from '../src/types.js';
@@ -125,5 +126,25 @@ describe('buildAgenda', () => {
   it('includes far-off items when the horizon is wide enough', () => {
     const agenda = buildAgenda(docs, now, 365);
     expect(agenda.map((e) => e.title)).toEqual(['overdue', 'soon', 'far off']);
+  });
+});
+
+describe('occurrencesBetween', () => {
+  const from = new Date('2026-07-01T00:00:00+05:30');
+  const to = new Date('2026-08-01T00:00:00+05:30');
+
+  it('expands a daily rule across the window on the local wall-clock', () => {
+    const r: Reminder = { at: '2026-07-11T22:00:00+05:30', rrule: 'FREQ=DAILY', status: 'active' };
+    const occ = occurrencesBetween(r, from, to);
+    expect(occ.length).toBe(21); // 11th through 31st
+    expect(occ[0]?.toISOString()).toBe(new Date('2026-07-11T22:00:00+05:30').toISOString());
+    expect(occ.every((d, i) => i === 0 || d.getTime() - (occ[i - 1] as Date).getTime() === 86_400_000)).toBe(true);
+  });
+
+  it('returns a one-shot only inside the window, and nothing when done', () => {
+    const one: Reminder = { at: '2026-07-09T12:00:00+05:30', status: 'active' };
+    expect(occurrencesBetween(one, from, to)).toHaveLength(1);
+    expect(occurrencesBetween(one, new Date('2026-08-01T00:00:00+05:30'), new Date('2026-09-01T00:00:00+05:30'))).toHaveLength(0);
+    expect(occurrencesBetween({ ...one, status: 'done' }, from, to)).toHaveLength(0);
   });
 });
