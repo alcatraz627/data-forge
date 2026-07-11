@@ -22,6 +22,19 @@ Insights:
   whole corpus churns non-canonical.
 - filterDocs scope semantics: a narrowing scope with an empty query lists its
   population (Canvas → all drawings) — scope chips double as filters.
+- Theme Lab's own light values fail their own stated 4.5 floor (Mist faint
+  3.47) — an AA enforcement pass now nudges every chip pair; contracts beat
+  pixels. Provisional palettes had accents impersonating meaning-hues
+  (Solar orange = overdue) — verbatim sync was a comprehension fix.
+- Sweep-found: completeReminder before the instance fires re-armed the same
+  instance; hover-only glyphs are invisible on phones (agenda check was
+  color:transparent at rest); unarchiving the last note stranded users on a
+  chipless hidden view. All fixed + browser-exercised (534068a, 581b83a).
+- verify.sh's bundle gate measured whichever index-*.js sorted first — the
+  250KB budget watched a 90KB secondary chunk while the entry sat at 136KB.
+  Resolve the chunk from index.html, always.
+- The parity checklist of record lives at
+  .claude/output/20260711-parity/checklist.md (gitignored, on-disk).
 
 ---
 
