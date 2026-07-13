@@ -12,6 +12,7 @@ const TYPES: Record<string, string> = {
   '.webmanifest': 'application/manifest+json',
   '.map': 'application/json',
   '.txt': 'text/plain',
+  '.woff': 'font/woff',
   '.woff2': 'font/woff2',
 };
 
@@ -34,8 +35,17 @@ export function addStaticRoutes(app: Hono, dist: string): void {
     } catch {
       // malformed paths (e.g. embedded null bytes) fall back to the SPA shell
     }
+    // Hashed build assets never change under the same name — cache them hard
+    // (repeat opens were re-downloading ~100KB per visit). The shell files
+    // must revalidate every time or a deploy stays invisible on the phone.
+    const cache = target.includes(`${root}/assets/`)
+      ? 'public, max-age=31536000, immutable'
+      : 'no-cache';
     return new Response(new Uint8Array(readFileSync(target)), {
-      headers: { 'content-type': TYPES[extname(target)] ?? 'application/octet-stream' },
+      headers: {
+        'content-type': TYPES[extname(target)] ?? 'application/octet-stream',
+        'cache-control': cache,
+      },
     });
   });
 }
